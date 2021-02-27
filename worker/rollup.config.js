@@ -1,13 +1,10 @@
 import { babel } from '@rollup/plugin-babel';
+import commonjs from '@rollup/plugin-commonjs';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 
-const worker = {
-  input: 'src/worker.ts',
-  output: {
-    format: 'esm',
-    file: 'dist/worker.js',
-  },
-  plugins: [
+function plugins() {
+  return [
+    commonjs(),
     nodeResolve({
       extensions: ['.js', '.ts'],
     }),
@@ -15,7 +12,16 @@ const worker = {
       babelHelpers: 'bundled',
       extensions: ['.js', '.ts'],
     }),
-  ],
+  ];
+}
+
+const worker = {
+  input: 'src/worker.ts',
+  output: {
+    format: 'esm',
+    file: 'dist/worker.js',
+  },
+  plugins: plugins(),
 };
 
 const client = {
@@ -24,15 +30,7 @@ const client = {
     format: 'esm',
     file: 'dist/client.js',
   },
-  plugins: [
-    nodeResolve({
-      extensions: ['.js', '.ts'],
-    }),
-    babel({
-      babelHelpers: 'bundled',
-      extensions: ['.js', '.ts'],
-    }),
-  ],
+  plugins: plugins(),
 };
 
 export default [worker, client];
