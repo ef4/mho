@@ -1,5 +1,7 @@
 import { LivenessWatcher } from './liveness';
 import { parse } from 'content-type';
+import { transform } from '@babel/standalone';
+import babelPlugin from './babel-plugin';
 
 const worker = (self as unknown) as ServiceWorkerGlobalScope;
 let livenessWatcher = new LivenessWatcher(worker);
@@ -31,17 +33,23 @@ async function handleFetch(event: FetchEvent): Promise<Response> {
   if (contentType) {
     switch (parse(contentType).type) {
       case 'application/javascript':
-        return transformJS(response);
+        return transformJS(url.pathname, response);
     }
   }
 
   return response;
 }
 
-async function transformJS(response: Response): Promise<Response> {
+async function transformJS(
+  filename: string,
+  response: Response
+): Promise<Response> {
   let source = await response.text();
-  source = `/* extra */\n${source}`;
-  return new Response(source, {
+  let result = transform(source, {
+    filename,
+    plugins: [babelPlugin],
+  });
+  return new Response(result.code, {
     headers: response.headers,
     status: response.status,
     statusText: response.statusText,
