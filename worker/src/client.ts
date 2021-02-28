@@ -1,6 +1,6 @@
 import { timeout } from './util';
 
-export async function start() {
+async function start() {
   if (!navigator.serviceWorker.controller) {
     navigator.serviceWorker.register('./worker.js', {
       scope: '/',
@@ -11,3 +11,5 @@ export async function start() {
     }
   }
 }
+
+start();

@@ -1,5 +1,6 @@
-import { transform } from '@babel/standalone';
-import babelPlugin from './babel-plugin';
+import { transformSync } from '@babel/core';
+import remap from './remap-plugin';
+import ts from '@babel/plugin-transform-typescript';
 
 export async function transformJS(
   filename: string,
@@ -7,11 +8,11 @@ export async function transformJS(
   forwardHeaders: Headers
 ): Promise<Response> {
   let source = await response.text();
-  let result = transform(source, {
+  let result = transformSync(source, {
     filename,
-    plugins: [babelPlugin],
+    plugins: [ts, remap],
   });
-  return new Response(result.code, {
+  return new Response(result!.code, {
     headers: forwardHeaders,
     status: response.status,
     statusText: response.statusText,
