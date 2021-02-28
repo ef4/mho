@@ -19,6 +19,6 @@
     "strictPropertyInitialization": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
-    "lib": ["ES2020", "ScriptHost", "WebWorker", "WebWorker.ImportScripts"]
+    "lib": ["ES2020", "ScriptHost", "DOM"]
   }
 }

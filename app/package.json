@@ -7,6 +7,7 @@
     "start": "http-server . -c-1"
   },
   "devDependencies": {
+    "@types/lodash": "^4.14.168",
     "http-server": "^0.12.3"
   }
 }
