@@ -5,17 +5,21 @@ function remap(source: string): string | undefined {
   switch (source) {
     case 'lodash':
       return 'https://cdn.skypack.dev/lodash';
+    case './message':
+      return './message.ts';
   }
   return undefined;
+}
+
+interface State {
+  opts: object;
+  filename: string;
 }
 
 export default function main() {
   return {
     visitor: {
-      ImportDeclaration(
-        path: NodePath<ImportDeclaration>,
-        state: { opts: object }
-      ) {
+      ImportDeclaration(path: NodePath<ImportDeclaration>, state: State) {
         let remapped = remap(path.node.source.value);
         if (remapped) {
           path.node.source.value = remapped;
