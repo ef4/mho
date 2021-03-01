@@ -1,0 +1,11 @@
+{
+  "name": "deps",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "devDependencies": {},
+  "dependencies": {
+    "@rollup/plugin-commonjs": "^17.1.0",
+    "rollup": "^2.40.0"
+  }
+}
