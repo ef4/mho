@@ -11,6 +11,9 @@ export async function transformJS(
   let result = transformSync(source, {
     filename,
     plugins: [ts, remap],
+    generatorOpts: {
+      compact: false,
+    },
   });
   return new Response(result!.code, {
     headers: forwardHeaders,

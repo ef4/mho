@@ -3,8 +3,8 @@ import type { ImportDeclaration } from '@babel/types';
 
 function remap(source: string): string | undefined {
   switch (source) {
-    case 'lodash':
-      return 'https://cdn.skypack.dev/lodash';
+    case 'lodash-es':
+      return '/dep-bundles/lodash-es.js';
     case './message':
       return './message.ts';
   }
