@@ -18,7 +18,7 @@
     "lint:hbs:fix": "ember-template-lint . --fix",
     "lint:js": "eslint . --cache",
     "lint:js:fix": "eslint . --fix",
-    "start": "STAGE2_ONLY=true ember serve",
+    "start": "ember serve",
     "test": "npm-run-all lint test:*",
     "test:ember": "ember test"
   },
@@ -67,5 +67,8 @@
   },
   "ember": {
     "edition": "octane"
+  },
+  "volta": {
+    "extends": "../package.json"
   }
 }

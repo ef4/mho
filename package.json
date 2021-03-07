@@ -8,5 +8,8 @@
     "ember-app",
     "worker",
     "deps"
-  ]
+  ],
+  "volta": {
+    "node": "14.16.0"
+  }
 }
