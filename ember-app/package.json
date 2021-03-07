@@ -70,5 +70,8 @@
   },
   "volta": {
     "extends": "../package.json"
+  },
+  "resolutions": {
+    "**/ember-inflector": "emberjs/ember-inflector#9ffd30efe2ca44382031ddee81d9189a2524e1f3"
   }
 }
