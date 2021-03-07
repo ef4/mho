@@ -9,8 +9,7 @@
   "devDependencies": {
     "@types/lodash-es": "^4.17.4",
     "http-server": "^0.12.3",
-    "lodash-es": "^4.17.21",
-    "pdfmake": "^0.1.70"
+    "lodash-es": "^4.17.21"
   },
   "volta": {
     "extends": "../package.json"

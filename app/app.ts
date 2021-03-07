@@ -1,6 +1,5 @@
 import { capitalize } from 'lodash-es';
 import message from './message';
-import pdfMake from 'pdfmake/build/pdfmake';
 
 export default class App {
   boot(): void {

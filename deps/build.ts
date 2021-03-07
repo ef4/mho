@@ -182,9 +182,6 @@ class Crawler {
 
 async function main() {
   let crawler = new Crawler();
-  // prime our needsBuild set by resolving some explicit entrypoints
-  //await crawler.resolve('lodash-es', '../app/app.ts');
-  //await crawler.resolve('pdfmake', '../app/app.ts');
   await crawler.resolve(
     'ember-data',
     readFileSync('../ember-app/dist/.stage2-output', 'utf8') + '/notional.js',

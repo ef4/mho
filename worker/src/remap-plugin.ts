@@ -1,18 +1,16 @@
 import type { NodePath } from '@babel/traverse';
-import type { ImportDeclaration } from '@babel/types';
+import type { ImportDeclaration, CallExpression } from '@babel/types';
 
 function remap(source: string): string | undefined {
   switch (source) {
-    case 'lodash-es':
-      return '/dep-bundles/lodash-es-4.17.21.js';
-    case 'pdfmake':
-      return './dep-bundles/pdfmake-0.1.70.js';
-    case './message':
-      return './message.ts';
-    case '@glimmer/component':
-      return '/dep-bundles/@glimmer/component-1.0.4.js';
     case '@glimmer/util':
       return '/dep-bundles/@glimmer/util-0.44.0.js';
+  }
+  if (
+    (source.startsWith('.') || source.startsWith('/')) &&
+    !source.endsWith('.js')
+  ) {
+    return source + '.js';
   }
   return undefined;
 }
@@ -29,6 +27,20 @@ export default function main() {
         let remapped = remap(path.node.source.value);
         if (remapped) {
           path.node.source.value = remapped;
+        }
+      },
+      CallExpression(path: NodePath<CallExpression>, state: State) {
+        if (isImportSyncExpression(path) || isDynamicImportExpression(path)) {
+          const [source] = path.get('arguments');
+          let { opts } = state;
+          let specifier = adjustSpecifier(
+            (source.node as any).value,
+            state.adjustFile,
+            opts,
+            true
+          );
+          source.replaceWith(stringLiteral(specifier));
+          return;
         }
       },
     },

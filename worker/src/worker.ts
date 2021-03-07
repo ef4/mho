@@ -25,6 +25,7 @@ async function handleFetch(event: FetchEvent): Promise<Response> {
     let url = new URL(event.request.url);
 
     if (!livenessWatcher.alive || url.origin !== worker.origin) {
+      // notice that we're letting this escape our catch. That's OK here.
       return fetch(event.request);
     }
 
@@ -32,7 +33,7 @@ async function handleFetch(event: FetchEvent): Promise<Response> {
     let { media, forwardHeaders } = mediaType(response);
     switch (media.type) {
       case 'application/javascript':
-        return transformJS(url.pathname, response, forwardHeaders);
+        return await transformJS(url.pathname, response, forwardHeaders);
     }
     return response;
   } catch (err) {
