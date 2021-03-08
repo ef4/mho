@@ -8,7 +8,9 @@ extern crate serde_derive;
 #[cfg(test)]
 mod tests;
 
+use rocket::State;
 use rocket_contrib::json::Json;
+
 use std::collections::HashMap;
 use std::fs;
 use walkdir::{DirEntry, WalkDir};
@@ -29,11 +31,6 @@ fn is_node_modules(entry: &DirEntry) -> bool {
         .unwrap_or(false)
 }
 
-#[derive(Serialize, Deserialize)]
-struct Manifest {
-    mtimes: std::collections::HashMap<String, u64>,
-}
-
 fn summarize(entry: &DirEntry) -> Option<(&str, u64)> {
     let name = entry.path().to_str()?;
     let meta = fs::metadata(entry.path()).ok()?;
@@ -44,28 +41,45 @@ fn summarize(entry: &DirEntry) -> Option<(&str, u64)> {
     Some((name, duration.as_secs()))
 }
 
+#[derive(Serialize, Deserialize)]
+struct Manifest {
+    mtimes: std::collections::HashMap<String, u64>,
+}
+
 #[get("/manifest")]
-fn manifest() -> Json<Manifest> {
-    let root = "../ember-app";
+fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
     let mut mtimes = HashMap::new();
-    let walker = WalkDir::new(root)
+    let walker = WalkDir::new(&project.root)
         .into_iter()
         .filter_entry(|e| !is_hidden(e) && !is_node_modules(e))
         .filter_map(|e| e.ok());
     for entry in walker {
         if entry.file_type().is_file() {
             if let Some((name, mtime)) = summarize(&entry) {
-                mtimes.insert(name[root.len()..].to_owned(), mtime);
+                mtimes.insert(name[project.root.len()..].to_owned(), mtime);
             }
         }
     }
     Json(Manifest { mtimes })
 }
 
-fn rocket() -> rocket::Rocket {
-    rocket::ignite().mount("/", routes![manifest])
+struct ProjectConfig {
+    root: String,
+}
+
+fn rocket(project: ProjectConfig) -> rocket::Rocket {
+    rocket::ignite()
+        .mount("/", routes![manifest])
+        .manage(project)
 }
 
 fn main() {
-    rocket().launch();
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {
+        panic!("not enough args");
+    }
+    let project = ProjectConfig {
+        root: args[1].clone(),
+    };
+    rocket(project).launch();
 }
