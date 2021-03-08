@@ -10,6 +10,7 @@ mod tests;
 
 use rocket::State;
 use rocket_contrib::json::Json;
+use rocket_contrib::serve::{Options, StaticFiles};
 
 use std::collections::HashMap;
 use std::fs;
@@ -64,22 +65,38 @@ fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
 }
 
 struct ProjectConfig {
-    root: String,
+    root: &'static str,
+    worker: &'static str,
+    deps: &'static str,
 }
 
 fn rocket(project: ProjectConfig) -> rocket::Rocket {
     rocket::ignite()
         .mount("/", routes![manifest])
+        .mount(
+            "/",
+            StaticFiles::new(
+                project.worker,
+                Options::Index | Options::DotFiles | Options::NormalizeDirs,
+            )
+            .rank(10),
+        )
+        .mount(
+            "/deps",
+            StaticFiles::new(
+                project.deps,
+                Options::Index | Options::DotFiles | Options::NormalizeDirs,
+            )
+            .rank(2),
+        )
         .manage(project)
 }
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 {
-        panic!("not enough args");
-    }
     let project = ProjectConfig {
-        root: args[1].clone(),
+        root: "../ember-app",
+        worker: "../worker/dist",
+        deps: "../deps/dist",
     };
     rocket(project).launch();
 }
