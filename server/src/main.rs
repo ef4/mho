@@ -64,18 +64,16 @@ fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
     Json(Manifest { mtimes })
 }
 
-struct ProjectConfig<'a> {
-    root: std::boxed::Box<String>,
-    worker: &'a str,
-    deps: &'a str,
+struct ProjectConfig {
+    root: &'static str,
+    worker: &'static str,
+    deps: &'static str,
 }
 
 #[launch]
 fn rocket() -> rocket::Rocket {
-    let root = std::fs::read_to_string("../ember-app/dist/.stage2-output")
-        .expect("can't find ember-app's stage2 output");
     let project = ProjectConfig {
-        root: Box::new(root),
+        root: "../ember-app",
         worker: "../worker/dist",
         deps: "../deps/dist",
     };
@@ -84,7 +82,7 @@ fn rocket() -> rocket::Rocket {
         .mount(
             "/",
             StaticFiles::new(
-                *project.root.clone(),
+                project.root,
                 Options::Index | Options::DotFiles | Options::NormalizeDirs,
             )
             .rank(1),
