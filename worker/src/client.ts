@@ -13,3 +13,6 @@ async function start() {
 }
 
 start();
+
+import { TemplateCompiler } from '@embroider/core';
+console.log('got template compiler', TemplateCompiler);

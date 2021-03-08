@@ -68,6 +68,7 @@ struct ProjectConfig {
     root: &'static str,
     worker: &'static str,
     deps: &'static str,
+    scaffolding: &'static str,
 }
 
 #[launch]
@@ -76,17 +77,11 @@ fn rocket() -> rocket::Rocket {
         root: "../ember-app",
         worker: "../worker/dist",
         deps: "../deps/dist",
+        scaffolding: "../out-ember-app/ember-app",
     };
     rocket::ignite()
         .mount("/", routes![manifest])
-        .mount(
-            "/",
-            StaticFiles::new(
-                project.root,
-                Options::Index | Options::DotFiles | Options::NormalizeDirs,
-            )
-            .rank(1),
-        )
+        .mount("/", StaticFiles::new(project.root, Options::None).rank(1))
         .mount(
             "/",
             StaticFiles::new(
@@ -97,11 +92,11 @@ fn rocket() -> rocket::Rocket {
         )
         .mount(
             "/deps",
-            StaticFiles::new(
-                project.deps,
-                Options::Index | Options::DotFiles | Options::NormalizeDirs,
-            )
-            .rank(3),
+            StaticFiles::new(project.deps, Options::None).rank(3),
+        )
+        .mount(
+            "/scaffolding",
+            StaticFiles::new(project.scaffolding, Options::None).rank(4),
         )
         .manage(project)
 }

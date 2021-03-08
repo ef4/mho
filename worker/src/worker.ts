@@ -1,6 +1,7 @@
 import { LivenessWatcher } from './liveness';
 import { parse, format, ParsedMediaType } from 'content-type';
 import { Transform } from './transform-js';
+import { handleSynthesizedFile } from './synthesize-files';
 
 const worker = (self as unknown) as ServiceWorkerGlobalScope;
 let livenessWatcher = new LivenessWatcher(worker);
@@ -37,7 +38,10 @@ async function handleFetch(event: FetchEvent): Promise<Response> {
       return await fetch(event.request);
     }
 
-    let response = await fetch(event.request);
+    let response =
+      (await handleSynthesizedFile(url.pathname)) ??
+      (await fetch(event.request));
+
     let { media, forwardHeaders } = mediaType(response);
     switch (media.type) {
       case 'application/javascript':
