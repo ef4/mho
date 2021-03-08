@@ -70,16 +70,30 @@ struct ProjectConfig {
     deps: &'static str,
 }
 
-fn rocket(project: ProjectConfig) -> rocket::Rocket {
+#[launch]
+fn rocket() -> rocket::Rocket {
+    let project = ProjectConfig {
+        root: "../ember-app",
+        worker: "../worker/dist",
+        deps: "../deps/dist",
+    };
     rocket::ignite()
         .mount("/", routes![manifest])
+        .mount(
+            "/",
+            StaticFiles::new(
+                project.root,
+                Options::Index | Options::DotFiles | Options::NormalizeDirs,
+            )
+            .rank(1),
+        )
         .mount(
             "/",
             StaticFiles::new(
                 project.worker,
                 Options::Index | Options::DotFiles | Options::NormalizeDirs,
             )
-            .rank(10),
+            .rank(2),
         )
         .mount(
             "/deps",
@@ -87,16 +101,7 @@ fn rocket(project: ProjectConfig) -> rocket::Rocket {
                 project.deps,
                 Options::Index | Options::DotFiles | Options::NormalizeDirs,
             )
-            .rank(2),
+            .rank(3),
         )
         .manage(project)
-}
-
-fn main() {
-    let project = ProjectConfig {
-        root: "../ember-app",
-        worker: "../worker/dist",
-        deps: "../deps/dist",
-    };
-    rocket(project).launch();
 }
