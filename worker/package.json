@@ -30,6 +30,7 @@
     "extends": "../package.json"
   },
   "dependencies": {
-    "@babel/plugin-proposal-decorators": "^7.13.5"
+    "@babel/plugin-proposal-decorators": "^7.13.5",
+    "@import-maps/resolve": "^1.0.1"
   }
 }

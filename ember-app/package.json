@@ -19,7 +19,7 @@
     "lint:js": "eslint . --cache",
     "lint:js:fix": "eslint . --fix",
     "start": "ember serve",
-    "static": "docker run -p 8080:80 --rm -v `cat dist/.stage2-output`:/app:ro -v $PWD/../worker/dist:/worker:ro my-nginx",
+    "static": "docker run -p 8080:80 --rm -v `cat dist/.stage2-output`:/app:ro -v $PWD/../worker/dist:/worker:ro -v $PWD/../deps/dist:/deps my-nginx",
     "test": "npm-run-all lint test:*",
     "test:ember": "ember test"
   },

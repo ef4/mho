@@ -32,3 +32,11 @@
 ## use template lexical scope on ember 3.25+
 
 https://github.com/emberjs/rfcs/blob/1e412bc8d3336141aaa40c5b5e032ad2a2af3e01/text/0496-handlebars-strict-mode.md#low-level-apis
+
+# TODOs
+
+## make nginx serve loading HTML until it sees a header from the service worker
+
+## make embroider/core web safe and roll remap-plugin into adjust-imports-plugin, etc.
+
+## try to change the service worker build to ship as modules, with only a shim entrypoint as a script

@@ -1,6 +1,6 @@
 import { LivenessWatcher } from './liveness';
 import { parse, format, ParsedMediaType } from 'content-type';
-import { transformJS } from './transform-js';
+import { Transform } from './transform-js';
 
 const worker = (self as unknown) as ServiceWorkerGlobalScope;
 let livenessWatcher = new LivenessWatcher(worker);
@@ -16,6 +16,14 @@ worker.addEventListener('activate', () => {
   console.log('activating service worker');
 });
 
+let transform = new Transform(worker.origin, {
+  imports: {
+    '@ember-data/adapter/-private':
+      '/deps/@ember-data/adapter-3.25.0/-private.js',
+    '@ember-data/model/-private': '/deps/@ember-data/model-3.25.0/-private.js',
+  },
+});
+
 worker.addEventListener('fetch', (event: FetchEvent) => {
   event.respondWith(handleFetch(event));
 });
@@ -25,15 +33,16 @@ async function handleFetch(event: FetchEvent): Promise<Response> {
     let url = new URL(event.request.url);
 
     if (!livenessWatcher.alive || url.origin !== worker.origin) {
-      // notice that we're letting this escape our catch. That's OK here.
-      return fetch(event.request);
+      // we're inside a catch, so the await is mandatory!
+      return await fetch(event.request);
     }
 
     let response = await fetch(event.request);
     let { media, forwardHeaders } = mediaType(response);
     switch (media.type) {
       case 'application/javascript':
-        return await transformJS(url.pathname, response, forwardHeaders);
+        // we're inside a catch, so the await is mandatory!
+        return await transform.run(url.pathname, response, forwardHeaders);
     }
     return response;
   } catch (err) {
