@@ -50,7 +50,7 @@ struct Manifest {
 #[get("/manifest")]
 fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
     let mut mtimes = HashMap::new();
-    let walker = WalkDir::new(&project.root)
+    let walker = WalkDir::new(&*project.root)
         .into_iter()
         .filter_entry(|e| !is_hidden(e) && !is_node_modules(e))
         .filter_map(|e| e.ok());
@@ -64,16 +64,18 @@ fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
     Json(Manifest { mtimes })
 }
 
-struct ProjectConfig {
-    root: &'static str,
-    worker: &'static str,
-    deps: &'static str,
+struct ProjectConfig<'a> {
+    root: std::boxed::Box<String>,
+    worker: &'a str,
+    deps: &'a str,
 }
 
 #[launch]
 fn rocket() -> rocket::Rocket {
+    let root = std::fs::read_to_string("../ember-app/dist/.stage2-output")
+        .expect("can't find ember-app's stage2 output");
     let project = ProjectConfig {
-        root: "../ember-app",
+        root: Box::new(root),
         worker: "../worker/dist",
         deps: "../deps/dist",
     };
@@ -82,7 +84,7 @@ fn rocket() -> rocket::Rocket {
         .mount(
             "/",
             StaticFiles::new(
-                project.root,
+                *project.root.clone(),
                 Options::Index | Options::DotFiles | Options::NormalizeDirs,
             )
             .rank(1),
