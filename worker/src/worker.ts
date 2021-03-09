@@ -31,6 +31,15 @@ let importMap = {
   '@ember-data/store/-private': '/deps/@ember-data/store-3.25.0/-private.js',
   '@babel/runtime/helpers/esm/defineProperty':
     '/deps/@babel/runtime-7.13.8/helpers/esm/defineProperty.js',
+  'ember-resolver': '/deps/ember-resolver-8.0.2.js',
+  'ember-load-initializers': '/deps/ember-load-initializers-2.1.2.js',
+  'ember-app/config/environment': '/config/environment.js',
+  '@glimmer/component/-private/ember-component-manager':
+    '/deps/@glimmer/component-1.0.4/-private/ember-component-manager.js',
+  '@ember-data/debug': '/deps/@ember-data/debug-3.25.0.js',
+  '@ember-data/store': '/deps/@ember-data/store-3.25.0.js',
+  'ember-cli-app-version/initializer-factory':
+    '/deps/ember-cli-app-version-4.0.0/initializer-factory.js',
 };
 
 let transformJS = new TransformJS(worker.origin, {

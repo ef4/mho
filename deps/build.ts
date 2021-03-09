@@ -263,6 +263,10 @@ async function main() {
     'ember-inflector',
     '@babel/runtime',
     'ember-resolver',
+    'ember-load-initializers',
+    '@glimmer/component',
+    '@glimmer/component/-private/ember-component-manager',
+    'ember-cli-app-version/initializer-factory',
   ]) {
     await crawler.addPackage(name, basedir);
   }

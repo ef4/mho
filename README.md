@@ -2,15 +2,11 @@
 
 current goal: minimum viable in-service-worker stage2
 
-need to load the template compiler
+NEXT:
 
-- embroider part is done, ember-source part is next
-- NEXT deps packager can't find ember-source because it has no resolvable JS inside it.
-
-and make it respect the new manifest for resolving things from the app
-
-and add explicit app-js file lists to the metadata for the addons, and bake that
-into their dep bundles, so we can resolve their components too
+- infer addon entrypoints based on everything reexported from the app tree, plus the app tree itself. Do that in stage1 and put it into package.json exports.
+- switch from our whitelist of addons to build to a blacklist
+- generate the import map automatically along with the deps
 
 # TODOs
 
