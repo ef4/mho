@@ -27,7 +27,7 @@ module.exports = {
     filename: '[name].js',
   },
   resolve: {
-    extensions: ['.ts', '.js'],
+    extensions: ['.ts', '.js', '.json'],
     fallback: {
       fs: false,
       path: require.resolve('path-browserify'),

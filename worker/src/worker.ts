@@ -28,6 +28,9 @@ let importMap = {
     '/deps/@ember-data/adapter-3.25.0/json-api.js',
   '@ember/string': '/deps/@ember/string-1.0.0.js',
   'ember-inflector': '/deps/ember-inflector-4.0.0.js',
+  '@ember-data/store/-private': '/deps/@ember-data/store-3.25.0/-private.js',
+  '@babel/runtime/helpers/esm/defineProperty':
+    '/deps/@babel/runtime-7.13.8/helpers/esm/defineProperty.js',
 };
 
 let transformJS = new TransformJS(worker.origin, {

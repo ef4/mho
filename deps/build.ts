@@ -4,6 +4,7 @@ import nodeResolve from '@rollup/plugin-node-resolve';
 import { dirname, relative, resolve, join, isAbsolute, basename } from 'path';
 import { readFileSync } from 'fs';
 import { Package, PackageCache } from '@embroider/core';
+import json from '@rollup/plugin-json';
 
 const rfc176 = JSON.parse(
   readFileSync(require.resolve('ember-rfc176-data/mappings.json'), 'utf8')
@@ -30,7 +31,7 @@ class Crawler {
 
   needsBuild: Set<Package> = new Set();
 
-  async resolve(
+  private async resolve(
     target: string,
     requester: string | undefined,
     currentPackage: Package,
@@ -145,7 +146,7 @@ class Crawler {
           resolve(pkg.root, interior),
         ])
       ),
-      plugins: [this.resolvePlugin(pkg), commonjs()],
+      plugins: [this.resolvePlugin(pkg), commonjs(), json()],
     });
     await build.write({
       format: 'esm',
@@ -177,6 +178,46 @@ class Crawler {
         return null;
       },
     };
+  }
+
+  async addPackage(specifier: string, basedir: string): Promise<void> {
+    let name = getPackageName(specifier);
+    if (!name) {
+      throw new Error(`addPackage only accepts bare specifiers`);
+    }
+    let parent = this.packages.get(basedir);
+    let pkg = this.packages.resolve(name, parent);
+
+    // first try to handle explicit subpath exports
+    let exports = pkg.packageJSON.exports;
+    if (exports && typeof exports === 'object' && !Array.isArray(exports)) {
+      // POJO exports
+      let first = Object.keys(exports)[0];
+      if (typeof first === 'string' && first.startsWith('.')) {
+        // we found subpath exports, so resolve all of them
+        for (let target of Object.keys(exports)) {
+          if (target.includes('*') || target.endsWith('/')) {
+            // these are capabilities we don't support yet
+            continue;
+          }
+          await this.resolve(
+            join(name, target),
+            join(basedir, 'index.js'),
+            parent,
+            undefined as any
+          );
+        }
+
+        return;
+      }
+    }
+
+    await this.resolve(
+      specifier,
+      join(basedir, 'index.js'),
+      parent,
+      undefined as any
+    );
   }
 }
 
@@ -212,10 +253,7 @@ export function explicitRelative(fromDir: string, toFile: string) {
 
 async function main() {
   let crawler = new Crawler();
-  let appPackage = crawler.packages.get(
-    readFileSync('../ember-app/dist/.stage2-output', 'utf8')
-  );
-  let notionalEntrypoint = join(appPackage.root, 'notional.js');
+  let basedir = readFileSync('../ember-app/dist/.stage2-output', 'utf8');
 
   // prewarming these deps for now
   for (let name of [
@@ -223,13 +261,10 @@ async function main() {
     'ember-source/dist/ember-template-compiler',
     '@ember/string',
     'ember-inflector',
+    '@babel/runtime',
+    'ember-resolver',
   ]) {
-    await crawler.resolve(
-      name,
-      notionalEntrypoint,
-      appPackage,
-      undefined as any
-    );
+    await crawler.addPackage(name, basedir);
   }
   await crawler.run();
 }
