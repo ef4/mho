@@ -9,10 +9,12 @@ async function start() {
     while (registration.active?.state !== 'activated') {
       await timeout(10);
     }
+    // most of this project is in a service worker context, and we have
+    // typescript configured that way. But just this file is really in DOM
+    // window context.
+    // @ts-ignore
+    window.location.reload();
   }
 }
 
 start();
-
-import { TemplateCompiler } from '@embroider/core';
-console.log('got template compiler', TemplateCompiler);

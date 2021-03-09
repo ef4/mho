@@ -7,7 +7,7 @@ module.exports = function (defaults) {
   let app = new EmberApp(defaults, {});
 
   process.env.STAGE2_ONLY = 'true';
-  return compatBuild(app, null, {
+  return compatBuild(app, require('@embroider/webpack').Webpack, {
     staticAddonTrees: true,
     staticAddonTestSupportTrees: true,
     staticComponents: true,

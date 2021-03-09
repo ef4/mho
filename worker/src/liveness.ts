@@ -1,7 +1,5 @@
 import { timeout } from './util';
 
-const signature = 'D6p8mEHY4WosB9dRDrtkYN!@Z';
-
 export class LivenessWatcher {
   private isAlive = true;
 
@@ -14,13 +12,14 @@ export class LivenessWatcher {
   }
 
   private async backendIsOurs(): Promise<boolean> {
-    let response = await fetch(`${this.worker.origin}/worker.js`);
+    let response = await fetch(`${this.worker.origin}/worker.js`, {
+      method: 'HEAD',
+    });
     switch (response.status) {
       case 404:
         return false;
       case 200:
-        let text = await response.text();
-        return text.indexOf(signature) !== -1;
+        return /use-the-platform/.test(response.headers.get('server') || '');
       default:
         throw new Error(`${response.status} from backend`);
     }

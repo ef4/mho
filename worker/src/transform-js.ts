@@ -7,7 +7,7 @@ import type { ImportMap } from '@import-maps/resolve';
 
 const macrosConfig = MacrosConfig.for(self);
 
-export class Transform {
+export class TransformJS {
   private plugins: TransformOptions['plugins'];
 
   constructor(baseURL: string, importMap: ImportMap) {

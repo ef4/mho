@@ -1,6 +1,7 @@
 import { LivenessWatcher } from './liveness';
 import { parse, format, ParsedMediaType } from 'content-type';
-import { Transform } from './transform-js';
+import { TransformJS } from './transform-js';
+import { TransformHBS } from './transform-hbs';
 import { handleSynthesizedFile } from './synthesize-files';
 
 const worker = (self as unknown) as ServiceWorkerGlobalScope;
@@ -17,12 +18,24 @@ worker.addEventListener('activate', () => {
   console.log('activating service worker');
 });
 
-let transform = new Transform(worker.origin, {
-  imports: {
-    '@ember-data/adapter/-private':
-      '/deps/@ember-data/adapter-3.25.0/-private.js',
-    '@ember-data/model/-private': '/deps/@ember-data/model-3.25.0/-private.js',
-  },
+let importMap = {
+  '@ember-data/adapter/-private':
+    '/deps/@ember-data/adapter-3.25.0/-private.js',
+  '@ember-data/model/-private': '/deps/@ember-data/model-3.25.0/-private.js',
+  'ember-source/dist/ember-template-compiler':
+    '/deps/ember-source-3.25.3/dist/ember-template-compiler.js',
+  '@ember-data/adapter/json-api':
+    '/deps/@ember-data/adapter-3.25.0/json-api.js',
+  '@ember/string': '/deps/@ember/string-1.0.0.js',
+  'ember-inflector': '/deps/ember-inflector-4.0.0.js',
+};
+
+let transformJS = new TransformJS(worker.origin, {
+  imports: importMap,
+});
+
+let transformHBS = new TransformHBS(worker.origin, {
+  imports: importMap,
 });
 
 worker.addEventListener('fetch', (event: FetchEvent) => {
@@ -33,8 +46,12 @@ async function handleFetch(event: FetchEvent): Promise<Response> {
   try {
     let url = new URL(event.request.url);
 
-    if (!livenessWatcher.alive || url.origin !== worker.origin) {
-      // we're inside a catch, so the await is mandatory!
+    if (
+      !livenessWatcher.alive ||
+      url.origin !== worker.origin ||
+      // the service worker doesn't rewrite its own code
+      ['/client.js', '/worker.js'].includes(url.pathname)
+    ) {
       return await fetch(event.request);
     }
 
@@ -45,8 +62,9 @@ async function handleFetch(event: FetchEvent): Promise<Response> {
     let { media, forwardHeaders } = mediaType(response);
     switch (media.type) {
       case 'application/javascript':
-        // we're inside a catch, so the await is mandatory!
-        return await transform.run(url.pathname, response, forwardHeaders);
+        return await transformJS.run(url.pathname, response, forwardHeaders);
+      case 'application/vnd.glimmer.hbs':
+        return await transformHBS.run(url.pathname, response, forwardHeaders);
     }
     return response;
   } catch (err) {
@@ -77,5 +95,17 @@ function mediaType(
     forwardHeaders = new Headers(forwardHeaders);
     forwardHeaders.set('content-type', format(media));
   }
+
+  if (response.url.endsWith('.hbs')) {
+    // we will treat it as handlebars type
+    media.type = 'application/vnd.glimmer.hbs';
+    forwardHeaders = new Headers(forwardHeaders);
+    // we will tell the browser it is javascript
+    forwardHeaders.set(
+      'content-type',
+      format({ type: 'application/javascript', parameters: media.parameters })
+    );
+  }
+
   return { media, forwardHeaders };
 }

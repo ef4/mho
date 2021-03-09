@@ -8,7 +8,10 @@ extern crate serde_derive;
 #[cfg(test)]
 mod tests;
 
+use rocket::fairing::AdHoc;
+use rocket::response::content::Html;
 use rocket::State;
+
 use rocket_contrib::json::Json;
 use rocket_contrib::serve::{Options, StaticFiles};
 
@@ -47,6 +50,11 @@ struct Manifest {
     mtimes: std::collections::HashMap<String, u64>,
 }
 
+#[get("/")]
+fn bootstrap() -> Html<&'static str> {
+    Html("<!DOCTYPE html><body data-launching-service-worker><script type=\"module\" src=\"/client.js\"></script>Launching service worker...</body>")
+}
+
 #[get("/manifest")]
 fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
     let mut mtimes = HashMap::new();
@@ -80,7 +88,15 @@ fn rocket() -> rocket::Rocket {
         scaffolding: "../out-ember-app/ember-app",
     };
     rocket::ignite()
-        .mount("/", routes![manifest])
+        .attach(AdHoc::on_response("Identify Server", |_, res| {
+            Box::pin(async move {
+                res.set_header(rocket::http::Header::new(
+                    "Server",
+                    "use-the-platform (Rocket)",
+                ));
+            })
+        }))
+        .mount("/", routes![bootstrap, manifest])
         .mount("/", StaticFiles::new(project.root, Options::None).rank(1))
         .mount(
             "/",

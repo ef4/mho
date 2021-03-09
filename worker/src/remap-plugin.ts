@@ -1,6 +1,8 @@
 import type { NodePath } from '@babel/traverse';
 import {
   ImportDeclaration,
+  ExportNamedDeclaration,
+  ExportAllDeclaration,
   CallExpression,
   isStringLiteral,
   stringLiteral,
@@ -42,10 +44,19 @@ export default function main(_unused: unknown, opts: Options) {
 
   return {
     visitor: {
-      ImportDeclaration(path: NodePath<ImportDeclaration>, state: State) {
-        let remapped = remap(path.node.source.value, state.filename);
+      'ImportDeclaration|ExportNamedDeclaration|ExportAllDeclaration'(
+        path: NodePath<
+          ImportDeclaration | ExportNamedDeclaration | ExportAllDeclaration
+        >,
+        state: State
+      ) {
+        let source = path.node.source;
+        if (!source) {
+          return;
+        }
+        let remapped = remap(source.value, state.filename);
         if (remapped) {
-          path.node.source.value = remapped;
+          source.value = remapped;
         }
       },
       CallExpression(path: NodePath<CallExpression>, state: State) {

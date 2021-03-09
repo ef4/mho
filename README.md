@@ -4,6 +4,9 @@ current goal: minimum viable in-service-worker stage2
 
 need to load the template compiler
 
+- embroider part is done, ember-source part is next
+- NEXT deps packager can't find ember-source because it has no resolvable JS inside it.
+
 and make it respect the new manifest for resolving things from the app
 
 and add explicit app-js file lists to the metadata for the addons, and bake that

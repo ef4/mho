@@ -9,6 +9,9 @@
     "worker",
     "deps"
   ],
+  "resolutions": {
+    "**/ember-inflector": "emberjs/ember-inflector#9ffd30efe2ca44382031ddee81d9189a2524e1f3"
+  },
   "volta": {
     "node": "14.16.0"
   }

@@ -1,10 +1,8 @@
 import { rollup, PluginContext } from 'rollup';
 import commonjs from '@rollup/plugin-commonjs';
 import nodeResolve from '@rollup/plugin-node-resolve';
-import { dirname, relative, resolve, join } from 'path';
+import { dirname, relative, resolve, join, isAbsolute, basename } from 'path';
 import { readFileSync } from 'fs';
-import getPackageName from '@embroider/core/src/package-name';
-import { explicitRelative } from '@embroider/core/src/paths';
 import { Package, PackageCache } from '@embroider/core';
 
 const rfc176 = JSON.parse(
@@ -17,6 +15,7 @@ for (let { module } of rfc176) {
 }
 externals.add('@glimmer/env');
 externals.add('ember');
+externals.delete('@ember/string');
 
 class Crawler {
   packages = new PackageCache();
@@ -79,6 +78,7 @@ class Crawler {
       requester,
       {}
     );
+
     let id =
       resolved && (typeof resolved === 'string' ? resolved : resolved.id);
     if (!id) {
@@ -180,16 +180,57 @@ class Crawler {
   }
 }
 
+// TODO: use the copy of this in @embroider/core when we port this code into embroider
+function getPackageName(specifier: string): string | undefined {
+  if (specifier[0] === '.' || specifier[0] === '/') {
+    // Not an absolute specifier
+    return;
+  }
+  let parts = specifier.split('/');
+  if (specifier[0] === '@') {
+    return `${parts[0]}/${parts[1]}`;
+  } else {
+    return parts[0];
+  }
+}
+
+// TODO use the copy of this in @embroider/core when we port this code into embroider
+export function explicitRelative(fromDir: string, toFile: string) {
+  let result = join(relative(fromDir, dirname(toFile)), basename(toFile));
+  if (!result.startsWith('/') && !result.startsWith('.')) {
+    result = './' + result;
+  }
+  if (isAbsolute(toFile) && result.endsWith(toFile)) {
+    // this prevents silly "relative" paths like
+    // "../../../../../Users/you/projects/your/stuff" when we could have just
+    // said "/Users/you/projects/your/stuff". The silly path isn't incorrect,
+    // but it's unnecessarily verbose.
+    return toFile;
+  }
+  return result;
+}
+
 async function main() {
   let crawler = new Crawler();
-  await crawler.resolve(
-    'ember-data',
-    readFileSync('../ember-app/dist/.stage2-output', 'utf8') + '/notional.js',
-    crawler.packages.get(
-      readFileSync('../ember-app/dist/.stage2-output', 'utf8')
-    ),
-    undefined as any
+  let appPackage = crawler.packages.get(
+    readFileSync('../ember-app/dist/.stage2-output', 'utf8')
   );
+  let notionalEntrypoint = join(appPackage.root, 'notional.js');
+
+  // prewarming these deps for now
+  for (let name of [
+    'ember-data',
+    'ember-source/dist/ember-template-compiler',
+    '@ember/string',
+    'ember-inflector',
+  ]) {
+    await crawler.resolve(
+      name,
+      notionalEntrypoint,
+      appPackage,
+      undefined as any
+    );
+  }
   await crawler.run();
 }
 
