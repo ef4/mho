@@ -8,6 +8,7 @@ import json from '@rollup/plugin-json';
 import rollupBabel from '@rollup/plugin-babel';
 import type { ImportMap } from '@import-maps/resolve';
 import { writeFileSync } from 'fs';
+import rollupHBS from './rollup-hbs-plugin';
 
 const rfc176 = JSON.parse(
   readFileSync(require.resolve('ember-rfc176-data/mappings.json'), 'utf8')
@@ -58,7 +59,10 @@ class Crawler {
   // needed. We want it to discover which other packages are needed by the
   // current package, but instead of letting it follow those edges we want to
   // start a separate build for that package.
-  resolver = nodeResolve({ browser: true });
+  resolver = nodeResolve({
+    browser: true,
+    extensions: ['.mjs', '.js', '.json', '.node', '.hbs'],
+  });
 
   needsBuild: Set<Package> = new Set();
 
@@ -83,7 +87,7 @@ class Crawler {
     if (!targetPackageName) {
       // we only handle the bare imports here, local imports go down the normal
       // path
-      return null;
+      return this.resolver.resolveId!.call(this as any, target, requester, {});
     }
 
     if (externals.has(target)) {
@@ -200,15 +204,19 @@ class Crawler {
         ])
       ),
       plugins: [
+        // TODO: we're transpiling decorators because I can't find an acorn
+        // plugin that parses them.
         rollupBabel({
           plugins: [
             ['@babel/plugin-transform-runtime'],
             ['@babel/plugin-proposal-decorators', { legacy: true }],
             ['@babel/plugin-proposal-class-properties', { loose: true }],
           ],
+          compact: false,
           babelHelpers: 'runtime',
         }),
         this.resolvePlugin(pkg),
+        rollupHBS(),
         commonjs(),
         json(),
       ],
@@ -422,6 +430,8 @@ async function main() {
     'ember-page-title/services/page-title',
     'ember-page-title/services/page-title-list',
     'ember-data/store',
+    'ember-welcome-page/components/welcome-page',
+    'ember-page-title/helpers/page-title',
   ]) {
     await crawler.addPackage(name, app);
   }
