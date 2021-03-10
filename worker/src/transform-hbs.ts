@@ -70,8 +70,8 @@ export class TransformHBS {
   ): Promise<Response> {
     let source = await response.text();
     let templateCompiler = await this.templateCompiler();
-    let result = templateCompiler.precompile(filename, source);
-    return new Response(result.compiled, {
+    let result = templateCompiler.compile(filename, source);
+    return new Response(result, {
       headers: forwardHeaders,
       status: response.status,
       statusText: response.statusText,
