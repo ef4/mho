@@ -1,22 +1,10 @@
 import { TemplateCompiler } from '@embroider/core';
-
-import {
-  parse,
-  resolve,
-  ImportMap,
-  ParsedImportMap,
-} from '@import-maps/resolve';
+import { ImportMapper } from './import-mapper';
 
 export class TransformHBS {
-  private parsedImportMap: ParsedImportMap;
-  private baseURL: URL;
   private loadPromise: Promise<TemplateCompiler> | undefined;
 
-  constructor(baseURL: string, importMap: ImportMap) {
-    this.baseURL = new URL(baseURL);
-    this.parsedImportMap = parse(importMap, this.baseURL);
-    //this.loadPromise = this.loadEmberTemplateCompiler();
-  }
+  constructor(private mapper: ImportMapper) {}
 
   private templateCompiler(): Promise<TemplateCompiler> {
     if (!this.loadPromise) {
@@ -30,10 +18,9 @@ export class TransformHBS {
   }
 
   private async loadTemplateCompiler(): Promise<TemplateCompiler> {
-    let compilerPath = resolve(
+    let compilerPath = await this.mapper.resolve(
       'ember-source/dist/ember-template-compiler',
-      this.parsedImportMap,
-      this.baseURL
+      this.mapper.baseURL.href
     );
     if (!compilerPath.matched) {
       throw new Error(

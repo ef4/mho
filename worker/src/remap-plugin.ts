@@ -7,11 +7,10 @@ import {
   isStringLiteral,
   stringLiteral,
 } from '@babel/types';
-import { parse, resolve, ImportMap } from '@import-maps/resolve';
+import { SyncImportMapper } from './import-mapper';
 
-interface Options {
-  baseURL: string;
-  importMap: ImportMap;
+export interface RemapOptions {
+  mapper: SyncImportMapper;
 }
 
 interface State {
@@ -19,18 +18,11 @@ interface State {
   filename: string;
 }
 
-export default function main(_unused: unknown, opts: Options) {
-  let baseURL = new URL(opts.baseURL);
-  let parsedMap = parse(opts.importMap, baseURL);
-
+export default function main(_unused: unknown, opts: RemapOptions) {
   function remap(specifier: string, requester: string): string | undefined {
-    let remapped = resolve(
-      specifier,
-      parsedMap,
-      new URL(requester, opts.baseURL)
-    );
+    let remapped = opts.mapper.resolve(specifier, requester);
     if (remapped?.matched) {
-      if (remapped.resolvedImport.origin === baseURL.origin) {
+      if (remapped.resolvedImport.origin === opts.mapper.baseURL.origin) {
         return remapped.resolvedImport.pathname;
       } else {
         return remapped.resolvedImport.href;

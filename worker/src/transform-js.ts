@@ -1,22 +1,22 @@
 import { transformSync, TransformOptions } from '@babel/core';
-import remap from './remap-plugin';
+import remap, { RemapOptions } from './remap-plugin';
 import ts from '@babel/plugin-transform-typescript';
 import { MacrosConfig } from '@embroider/macros/src/node';
 import macrosPlugin from '@embroider/macros/src/babel/macros-babel-plugin';
-import type { ImportMap } from '@import-maps/resolve';
 import decorators from '@babel/plugin-proposal-decorators';
 import classProperties from '@babel/plugin-proposal-class-properties';
 import debugMacros from 'babel-plugin-debug-macros';
 import modulesAPI from 'babel-plugin-ember-modules-api-polyfill';
 import runtime from '@babel/plugin-transform-runtime';
+import { ImportMapper } from './import-mapper';
 
 const macrosConfig = MacrosConfig.for(self);
 
 export class TransformJS {
-  private plugins: TransformOptions['plugins'];
+  constructor(private mapper: ImportMapper) {}
 
-  constructor(baseURL: string, importMap: ImportMap) {
-    this.plugins = [
+  private async plugins(): Promise<TransformOptions['plugins']> {
+    return [
       [
         decorators,
         {
@@ -89,9 +89,8 @@ export class TransformJS {
       [
         remap,
         {
-          baseURL,
-          importMap,
-        },
+          mapper: await this.mapper.snapshot(),
+        } as RemapOptions,
       ],
     ];
   }
@@ -104,7 +103,7 @@ export class TransformJS {
     let source = await response.text();
     let result = transformSync(source, {
       filename,
-      plugins: this.plugins,
+      plugins: await this.plugins(),
       generatorOpts: {
         compact: false,
       },

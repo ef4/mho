@@ -5,6 +5,9 @@ import { dirname, relative, resolve, join, isAbsolute, basename } from 'path';
 import { readFileSync } from 'fs';
 import { Package, PackageCache } from '@embroider/core';
 import json from '@rollup/plugin-json';
+import rollupBabel from '@rollup/plugin-babel';
+import type { ImportMap } from '@import-maps/resolve';
+import { writeFileSync } from 'fs';
 
 const rfc176 = JSON.parse(
   readFileSync(require.resolve('ember-rfc176-data/mappings.json'), 'utf8')
@@ -58,6 +61,8 @@ class Crawler {
   resolver = nodeResolve({ browser: true });
 
   needsBuild: Set<Package> = new Set();
+
+  private interPackageResolutions = new Map<Package, Set<Package>>();
 
   private async resolve(
     target: string,
@@ -136,6 +141,13 @@ class Crawler {
       return undefined;
     }
 
+    let resolutions = this.interPackageResolutions.get(currentPackage);
+    if (!resolutions) {
+      resolutions = new Set();
+      this.interPackageResolutions.set(currentPackage, resolutions);
+    }
+    resolutions.add(pkg);
+
     let exteriorSubpath = '.' + target.slice(pkg.name.length);
     let interiorSubpath = './' + relative(pkg.root, id);
 
@@ -183,17 +195,29 @@ class Crawler {
     let build = await rollup({
       input: Object.fromEntries(
         [...entrypoints.entries()].map(([exterior, interior]) => [
-          join(`${pkg.name}-${pkg.version}`, exterior),
+          this.urlFor(pkg, exterior),
           resolve(pkg.root, interior),
         ])
       ),
-      plugins: [this.resolvePlugin(pkg), commonjs(), json()],
+      plugins: [
+        rollupBabel({
+          plugins: [
+            ['@babel/plugin-transform-runtime'],
+            ['@babel/plugin-proposal-decorators', { legacy: true }],
+            ['@babel/plugin-proposal-class-properties', { loose: true }],
+          ],
+          babelHelpers: 'runtime',
+        }),
+        this.resolvePlugin(pkg),
+        commonjs(),
+        json(),
+      ],
     });
     await build.write({
       format: 'esm',
-      entryFileNames: `[name].js`,
+      entryFileNames: `[name]`,
       dir: `dist`,
-      chunkFileNames: `${pkg.name}-${pkg.version}/chunk-[hash].js`,
+      chunkFileNames: `${this.scopeFor(pkg)}chunk-[hash].js`,
     });
   }
 
@@ -219,6 +243,87 @@ class Crawler {
         return null;
       },
     };
+  }
+
+  private scopeFor(pkg: Package): string {
+    return `${pkg.name}-${pkg.version}/`;
+  }
+
+  private urlFor(pkg: Package, localEntrypoint: string): string {
+    if (localEntrypoint === '.') {
+      // the bare export of a package is served at index.html
+      return join(this.scopeFor(pkg), 'index.js');
+    } else {
+      // all the other deeper exports are namespace within our URL scheme under
+      // "e" for "export". This ensures that no matter how they're named they
+      // can never conflict with the bare export or any common chunks that we
+      // generate.
+      return join(
+        this.scopeFor(pkg),
+        'e',
+        localEntrypoint.replace(/\.js$/, '') + '.js'
+      );
+    }
+  }
+
+  importMap(from: Package, mountPoint = '/deps/'): ImportMap {
+    let queue: Package[] = [from];
+    let importsForPackage = new Map<Package, Record<string, string>>();
+    while (true) {
+      let pkg = queue.shift();
+      if (!pkg) {
+        break;
+      }
+      if (importsForPackage.has(pkg)) {
+        continue;
+      }
+      let imports: Record<string, string> = {};
+      let deps = this.interPackageResolutions.get(pkg);
+      if (deps) {
+        for (let dep of deps) {
+          let entrypoints = this.entrypoints.get(dep);
+          if (entrypoints) {
+            for (let exterior of entrypoints.keys()) {
+              imports[join(dep.name, exterior)] = `${mountPoint}${this.urlFor(
+                dep,
+                exterior
+              )}`;
+            }
+          }
+          queue.push(dep);
+        }
+      }
+      importsForPackage.set(pkg, imports);
+    }
+
+    let imports: Record<string, string> = {};
+    let scopes: Record<string, Record<string, string>> = {};
+    let peers = [...importsForPackage.values()];
+    for (let [pkg, pkgImports] of importsForPackage) {
+      for (let [name, url] of Object.entries(pkgImports)) {
+        if (
+          pkg === from ||
+          peers.every((peer) => peer[name] == null || peer[name] === url)
+        ) {
+          // everybody agrees, so go in top level imports
+          imports[name] = url;
+        } else {
+          // somebody disagrees, so keep it in your own scope
+          let pkgScope = this.scopeFor(pkg);
+          let scoped = scopes[pkgScope];
+          if (!scoped) {
+            scoped = {};
+            scopes[pkgScope] = scoped;
+          }
+          scoped[name] = url;
+        }
+      }
+    }
+
+    // TODO: your app name here
+    imports['ember-app/config/environment'] = '/config/environment.js';
+
+    return { imports, scopes };
   }
 
   async addPackage(specifier: string, parent: Package): Promise<void> {
@@ -306,7 +411,35 @@ async function main() {
       await crawler.addPackage(dep.name, app);
     }
   }
+
+  // TODO: v1-add.ts should parse app-js for re-exports and put them into
+  // package.json exports so this is automatic
+  for (let name of [
+    '@glimmer/component/-private/ember-component-manager',
+    'ember-cli-app-version/initializer-factory',
+    'ember-resolver/resolvers/classic/container-debug-adapter',
+    'ember-data/setup-container',
+    'ember-page-title/services/page-title',
+    'ember-page-title/services/page-title-list',
+    'ember-data/store',
+  ]) {
+    await crawler.addPackage(name, app);
+  }
+
+  for (let name of [
+    '@ember-data/model/-private',
+    '@ember-data/debug/setup',
+    '@ember-data/store',
+  ]) {
+    await crawler.addPackage(name, crawler.packages.resolve('ember-data', app));
+  }
+
   await crawler.run();
+
+  writeFileSync(
+    '../ember-app/importmap.json',
+    JSON.stringify(crawler.importMap(app), null, 2)
+  );
 }
 
 main().catch((err) => {
