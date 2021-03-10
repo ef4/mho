@@ -8,13 +8,14 @@ extern crate serde_derive;
 #[cfg(test)]
 mod tests;
 
+mod etag;
+
+use etag::ETag;
+
 use rocket::fairing::AdHoc;
-use rocket::handler::Outcome;
 use rocket::response::content::Html;
 use rocket::response::NamedFile;
-use rocket::response::{self, Responder, Response};
 use rocket::State;
-use rocket::{Data, Request};
 
 use rocket_contrib::json::Json;
 use rocket_contrib::serve::{Options, StaticFiles};
@@ -78,24 +79,19 @@ fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
 }
 
 #[get("/client.js")]
-async fn client_js<'r>(project: State<ProjectConfig, 'r>) -> Option<NamedFile> {
-    NamedFile::open(project.worker.join("client.js")).await.ok()
+async fn client_js<'r>(project: State<ProjectConfig, 'r>) -> Option<ETag<NamedFile>> {
+    let named = NamedFile::open(project.worker.join("client.js"))
+        .await
+        .ok()?;
+    ETag::on(named).await
 }
 
 #[get("/worker.js")]
-async fn worker_js<'r>(project: State<ProjectConfig, 'r>) -> Option<NamedFile> {
-    NamedFile::open(project.worker.join("worker.js")).await.ok()
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ETag<R>(pub String, pub R);
-impl<'r, 'o: 'r, R: Responder<'r, 'o>> Responder<'r, 'o> for ETag<R> {
-    fn respond_to(self, req: &'r Request<'_>) -> response::Result<'o> {
-        Response::build()
-            .merge(self.1.respond_to(req)?)
-            .header(rocket::http::Header::new("Etag", format!("\"{}\"", self.0)))
-            .ok()
-    }
+async fn worker_js<'r>(project: State<ProjectConfig, 'r>) -> Option<ETag<NamedFile>> {
+    let named = NamedFile::open(project.worker.join("worker.js"))
+        .await
+        .ok()?;
+    ETag::on(named).await
 }
 
 #[get("/<path..>", rank = 10)]
@@ -104,13 +100,7 @@ async fn app_files<'r>(
     project: State<ProjectConfig, 'r>,
 ) -> Option<ETag<NamedFile>> {
     let named = NamedFile::open(project.root.join(path)).await.ok()?;
-    let meta = named.file().metadata().await.ok()?;
-    let modified = meta.modified().ok()?;
-    let duration = modified
-        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-        .ok()?;
-    let etag = duration.as_secs().to_string();
-    Some(ETag(etag, named))
+    ETag::on(named).await
 }
 
 struct ProjectConfig {
