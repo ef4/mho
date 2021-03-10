@@ -11,6 +11,18 @@
       "runtimeArgs": ["-r", "ts-node/register"],
       "cwd": "${workspaceFolder}/deps",
       "args": ["build.ts"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "build ember-app",
+      "cwd": "${workspaceFolder}/ember-app",
+      "program": "../node_modules/.bin/ember",
+      "args": ["build"],
+      "env": {
+        "JOBS": "1"
+      },
+      "outputCapture": "std"
     }
   ]
 }

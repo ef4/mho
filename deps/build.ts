@@ -14,9 +14,37 @@ const externals = new Set<string>();
 for (let { module } of rfc176) {
   externals.add(module);
 }
+
+// more things that are provided by babel
 externals.add('@glimmer/env');
 externals.add('ember');
+
+// this is a real package but it's still listed in rfc176
 externals.delete('@ember/string');
+
+// these are build only dependnecies. To the extent that they show up in browser
+// code imports, it's because they're more babel macro behavior (like hbs from
+// ember-cli-htmlbars)
+externals.add('ember-cli-htmlbars');
+externals.add('ember-cli-babel');
+externals.add('@ember/optional-features');
+externals.add('@embroider/core');
+externals.add('@embroider/compat');
+externals.add('@embroider/webpack');
+externals.add('ember-cli');
+externals.add('babel-eslint');
+externals.add('broccoli-asset-rev');
+externals.add('ember-auto-import');
+externals.add('ember-cli-dependency-checker');
+externals.add('eslint');
+externals.add('prettier');
+externals.add('ember-template-lint');
+externals.add('eslint-plugin-ember');
+externals.add('eslint-config-prettier');
+externals.add('eslint-plugin-node');
+externals.add('eslint-plugin-prettier');
+externals.add('http-server');
+externals.add('npm-run-all');
 
 class Crawler {
   packages = new PackageCache();
@@ -46,8 +74,8 @@ class Crawler {
       return 'require';
     }
 
-    let targetPackage = getPackageName(target);
-    if (!targetPackage) {
+    let targetPackageName = getPackageName(target);
+    if (!targetPackageName) {
       // we only handle the bare imports here, local imports go down the normal
       // path
       return null;
@@ -62,7 +90,7 @@ class Crawler {
 
     if (
       requester &&
-      targetPackage === currentPackage.name &&
+      targetPackageName === currentPackage.name &&
       currentPackage.isV2Ember() &&
       currentPackage.meta['auto-upgraded']
     ) {
@@ -95,6 +123,19 @@ class Crawler {
     if (!target.startsWith(pkg.name)) {
       throw new Error(`didn't expect ${target} to map inside ${pkg.name}`);
     }
+
+    // if a rewritten package has no default entrypoint, but its original copy
+    // did, we can accidentally skip over the rewritten one and find the copy.
+    // This prevents that. We want it to look missing, not accidentally see a v1
+    // addon.
+    let targetPackage = this.packages.resolve(
+      targetPackageName,
+      currentPackage
+    );
+    if (targetPackage.root !== pkg.root) {
+      return undefined;
+    }
+
     let exteriorSubpath = '.' + target.slice(pkg.name.length);
     let interiorSubpath = './' + relative(pkg.root, id);
 
@@ -180,12 +221,11 @@ class Crawler {
     };
   }
 
-  async addPackage(specifier: string, basedir: string): Promise<void> {
+  async addPackage(specifier: string, parent: Package): Promise<void> {
     let name = getPackageName(specifier);
     if (!name) {
       throw new Error(`addPackage only accepts bare specifiers`);
     }
-    let parent = this.packages.get(basedir);
     let pkg = this.packages.resolve(name, parent);
 
     // first try to handle explicit subpath exports
@@ -202,7 +242,7 @@ class Crawler {
           }
           await this.resolve(
             join(name, target),
-            join(basedir, 'index.js'),
+            join(parent.root, 'index.js'),
             parent,
             undefined as any
           );
@@ -212,12 +252,18 @@ class Crawler {
       }
     }
 
-    await this.resolve(
-      specifier,
-      join(basedir, 'index.js'),
-      parent,
-      undefined as any
-    );
+    try {
+      await this.resolve(
+        specifier,
+        join(parent.root, 'index.js'),
+        parent,
+        undefined as any
+      );
+    } catch (err) {
+      console.warn(
+        `can't resolve default entrypoint for ${specifier}, moving on`
+      );
+    }
   }
 }
 
@@ -254,21 +300,11 @@ export function explicitRelative(fromDir: string, toFile: string) {
 async function main() {
   let crawler = new Crawler();
   let basedir = readFileSync('../ember-app/dist/.stage2-output', 'utf8');
-
-  // prewarming these deps for now
-  for (let name of [
-    'ember-data',
-    'ember-source/dist/ember-template-compiler',
-    '@ember/string',
-    'ember-inflector',
-    '@babel/runtime',
-    'ember-resolver',
-    'ember-load-initializers',
-    '@glimmer/component',
-    '@glimmer/component/-private/ember-component-manager',
-    'ember-cli-app-version/initializer-factory',
-  ]) {
-    await crawler.addPackage(name, basedir);
+  let app = crawler.packages.getApp(basedir);
+  for (let dep of app.dependencies) {
+    if (!externals.has(dep.name)) {
+      await crawler.addPackage(dep.name, app);
+    }
   }
   await crawler.run();
 }
