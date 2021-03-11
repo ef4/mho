@@ -8,9 +8,9 @@ extern crate serde_derive;
 #[cfg(test)]
 mod tests;
 
-mod etag;
+mod cache_headers;
 
-use etag::ETag;
+use cache_headers::CacheHeaders;
 
 use rocket::fairing::AdHoc;
 use rocket::response::content::Html;
@@ -78,29 +78,29 @@ fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
     Json(Manifest { etags })
 }
 
-#[get("/client.js")]
-async fn client_js<'r>(project: State<ProjectConfig, 'r>) -> Option<ETag<NamedFile>> {
-    let named = NamedFile::open(project.worker.join("client.js"))
-        .await
-        .ok()?;
-    ETag::on(named).await
-}
-
-#[get("/worker.js")]
-async fn worker_js<'r>(project: State<ProjectConfig, 'r>) -> Option<ETag<NamedFile>> {
-    let named = NamedFile::open(project.worker.join("worker.js"))
-        .await
-        .ok()?;
-    ETag::on(named).await
-}
-
-#[get("/<path..>", rank = 10)]
-async fn app_files<'r>(
+#[get("/<path..>", rank = 9)]
+async fn files<'r>(
     path: PathBuf,
     project: State<ProjectConfig, 'r>,
-) -> Option<ETag<NamedFile>> {
-    let named = NamedFile::open(project.root.join(path)).await.ok()?;
-    ETag::on(named).await
+) -> Option<CacheHeaders<NamedFile>> {
+    let target;
+    let mut long_lived = false;
+    if path == PathBuf::from("client.js") || path == PathBuf::from("worker.js") {
+        target = project.worker.join(path);
+    } else if path.starts_with("deps") {
+        target = project.deps.join(path.strip_prefix("deps").ok()?);
+        long_lived = true;
+    } else {
+        target = project.root.join(path);
+    }
+
+    println!("attempting to serve {}", target.display());
+    let named = NamedFile::open(target).await.ok()?;
+    if long_lived {
+        Some(CacheHeaders::immutable(named))
+    } else {
+        CacheHeaders::etag(named).await
+    }
 }
 
 struct ProjectConfig {
@@ -127,22 +127,7 @@ fn rocket() -> rocket::Rocket {
                 ));
             })
         }))
-        .mount(
-            "/",
-            routes![bootstrap, manifest, client_js, worker_js, app_files],
-        )
-        // .mount(
-        //     "/",
-        //     StaticFiles::new(
-        //         project.root.to_owned(),
-        //         Options::Index | Options::DotFiles | Options::NormalizeDirs,
-        //     )
-        //     .rank(1),
-        // )
-        .mount(
-            "/deps",
-            StaticFiles::new(project.deps.to_owned(), Options::None).rank(3),
-        )
+        .mount("/", routes![bootstrap, manifest, files])
         .mount(
             "/scaffolding",
             StaticFiles::new(project.scaffolding.to_owned(), Options::None).rank(4),
