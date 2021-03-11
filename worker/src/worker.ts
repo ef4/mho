@@ -65,7 +65,7 @@ async function handleFetch(event: FetchEvent): Promise<Response> {
       event.request,
       cacheEnabled,
       async (depend) => {
-        let response = await handleSynthesizedFile(url.pathname);
+        let response = await handleSynthesizedFile(url.pathname, depend);
 
         if (response && url.searchParams.get('untranspiled') != null) {
           return response;

@@ -1,4 +1,5 @@
 import { compile } from './js-handlebars';
+import { DependencyTracker } from './manifest';
 const entryTemplate = compile(`
 import { importSync as i, macroCondition, getGlobalConfig } from '@embroider/macros';
 let w = window;
@@ -85,7 +86,9 @@ if (!runningTests) {
   styles?: { path: string }[];
 }) => string;
 
-export async function emberJSEntrypoint(): Promise<Response> {
+export async function emberJSEntrypoint(
+  depend: DependencyTracker
+): Promise<Response> {
   return new Response(
     entryTemplate({
       amdModules,
