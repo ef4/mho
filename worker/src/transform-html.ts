@@ -29,6 +29,24 @@ const rootURL = '/';
 const appName = 'ember-app';
 
 function traverse(node: parse5.Node) {
+  if (node.nodeName === 'head') {
+    node.childNodes.push({
+      nodeName: 'meta',
+      tagName: 'meta',
+      attrs: [
+        { name: 'name', value: 'ember-app/config/environment' },
+        {
+          name: 'content',
+          value:
+            '%7B%22modulePrefix%22%3A%22ember-app%22%2C%22environment%22%3A%22development%22%2C%22rootURL%22%3A%22%2F%22%2C%22locationType%22%3A%22auto%22%2C%22EmberENV%22%3A%7B%22FEATURES%22%3A%7B%7D%2C%22EXTEND_PROTOTYPES%22%3A%7B%22Date%22%3Afalse%7D%2C%22_APPLICATION_TEMPLATE_WRAPPER%22%3Afalse%2C%22_DEFAULT_ASYNC_OBSERVERS%22%3Atrue%2C%22_JQUERY_INTEGRATION%22%3Afalse%2C%22_TEMPLATE_ONLY_GLIMMER_COMPONENTS%22%3Atrue%7D%2C%22APP%22%3A%7B%22name%22%3A%22ember-app%22%2C%22version%22%3A%220.0.0%2Bf4c67075%22%7D%2C%22exportApplicationGlobal%22%3Atrue%7D',
+        },
+      ],
+      namespaceURI: 'http://www.w3.org/1999/xhtml',
+      childNodes: [],
+      parentNode: node,
+    });
+  }
+
   if (node.nodeName === 'script') {
     let src = node.attrs.find((a) => a.name === 'src');
     if (src) {

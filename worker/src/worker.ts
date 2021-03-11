@@ -45,13 +45,19 @@ async function handleFetch(event: FetchEvent): Promise<Response> {
       !livenessWatcher.alive ||
       url.origin !== worker.origin ||
       // the service worker doesn't rewrite its own code
-      ['/client.js', '/worker.js'].includes(url.pathname)
+      ['/client.js', '/worker.js'].includes(url.pathname) ||
+      url.searchParams.get('raw') != null
     ) {
       return await fetch(event.request);
     }
 
     return manifestCache.through(event.request, async (dependsOn) => {
       let response = await handleSynthesizedFile(url.pathname);
+
+      if (response && url.searchParams.get('untranspiled') != null) {
+        return response;
+      }
+
       if (!response) {
         response = await fetch(event.request);
       }

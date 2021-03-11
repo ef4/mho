@@ -39,5 +39,8 @@
   "volta": {
     "extends": "../package.json"
   },
-  "dependencies": {}
+  "dependencies": {
+    "handlebars": "^4.7.7",
+    "js-string-escape": "^1.0.1"
+  }
 }

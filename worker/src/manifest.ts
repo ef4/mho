@@ -86,7 +86,7 @@ export class ManifestCache {
             }
           }
         }
-        console.log(`not excluding ${dep.url}`);
+        //console.log(`not excluding ${dep.url}`);
         tracked.push([local, dep.headers.get('etag')]);
       } else {
         console.log(

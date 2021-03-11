@@ -11,7 +11,7 @@
   ],
   "resolutions": {
     "**/ember-inflector": "emberjs/ember-inflector#9ffd30efe2ca44382031ddee81d9189a2524e1f3",
-    "**/@ember/test-waiters": "emberjs/ember-test-waiters#5227f97d2825e48893b32883e4576d3bff731cf5"
+    "**/@ember/test-waiters": "^2.4.2"
   },
   "volta": {
     "node": "14.16.0"

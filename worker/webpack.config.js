@@ -32,5 +32,9 @@ module.exports = {
       fs: false,
       path: require.resolve('path-browserify'),
     },
+    alias: {
+      // this prevents complaining about require.extensions
+      handlebars: 'handlebars/dist/cjs/handlebars.js',
+    },
   },
 };

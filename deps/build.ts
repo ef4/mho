@@ -2,7 +2,7 @@ import { rollup, PluginContext } from 'rollup';
 import commonjs from '@rollup/plugin-commonjs';
 import nodeResolve from '@rollup/plugin-node-resolve';
 import { dirname, relative, resolve, join, isAbsolute, basename } from 'path';
-import { readFileSync } from 'fs';
+import { copySync, readFileSync } from 'fs-extra';
 import { Package, PackageCache } from '@embroider/core';
 import json from '@rollup/plugin-json';
 import rollupBabel from '@rollup/plugin-babel';
@@ -83,6 +83,20 @@ class Crawler {
       return 'require';
     }
 
+    // TODO: patch ember-cli-app-version and ember-export-application-global,
+    // they're doing bad things
+    if (
+      target === '../config/environment' &&
+      /(ember-cli-app-version|ember-export-application-global)\/_app_/.test(
+        requester!
+      )
+    ) {
+      return {
+        id: 'ember-app/config/environment',
+        external: true,
+      };
+    }
+
     let targetPackageName = getPackageName(target);
     if (!targetPackageName) {
       // we only handle the bare imports here, local imports go down the normal
@@ -142,6 +156,9 @@ class Crawler {
       currentPackage
     );
     if (targetPackage.root !== pkg.root) {
+      console.log(
+        `skipping ${target} because it resolved beyond our rewritten packages`
+      );
       return undefined;
     }
 
@@ -159,6 +176,17 @@ class Crawler {
     if (!entrypoints) {
       entrypoints = new Map();
       this.entrypoints.set(pkg, entrypoints);
+
+      // TODO: this won't be necessary when we update v1-addon to emit "exports"
+      // correctly
+      if (pkg.isV2Addon()) {
+        let appJS = pkg.meta['app-js'];
+        if (appJS) {
+          for (let local of Object.values(appJS)) {
+            entrypoints.set(local, local);
+          }
+        }
+      }
     }
 
     let prior = entrypoints.get(exteriorSubpath);
@@ -227,6 +255,10 @@ class Crawler {
       dir: `dist`,
       chunkFileNames: `${this.scopeFor(pkg)}chunk-[hash].js`,
     });
+    copySync(
+      join(pkg.root, 'package.json'),
+      join(`dist`, this.scopeFor(pkg), 'package.json')
+    );
   }
 
   private resolvePlugin(pkg: Package) {
@@ -298,6 +330,9 @@ class Crawler {
               )}`;
             }
           }
+          imports[
+            join(dep.name, 'package.json')
+          ] = `${mountPoint}${this.scopeFor(dep)}package.json`;
           queue.push(dep);
         }
       }
@@ -365,18 +400,19 @@ class Crawler {
       }
     }
 
-    try {
-      await this.resolve(
-        specifier,
-        join(parent.root, 'index.js'),
-        parent,
-        undefined as any
-      );
-    } catch (err) {
-      console.warn(
-        `can't resolve default entrypoint for ${specifier}, moving on`
-      );
-    }
+    await this.resolve(
+      name + '/package.json',
+      join(parent.root, 'index.js'),
+      parent,
+      undefined as any
+    );
+
+    await this.resolve(
+      specifier,
+      join(parent.root, 'index.js'),
+      parent,
+      undefined as any
+    );
   }
 }
 
