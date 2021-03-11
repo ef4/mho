@@ -55,6 +55,7 @@ export function cached<T>(
       try {
         let value = await fn();
         if (loading) {
+          cached = { value };
           loading.resolve(value);
         }
       } catch (err) {

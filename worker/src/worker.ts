@@ -51,28 +51,50 @@ async function handleFetch(event: FetchEvent): Promise<Response> {
       return await fetch(event.request);
     }
 
-    return manifestCache.through(event.request, async (dependsOn) => {
-      let response = await handleSynthesizedFile(url.pathname);
+    // whenever we're loading the root HTML page, we invalidate the manifest.
+    // That will cause it load fresh once, and then remain stable while serving
+    // all the supporting requests for modules and assets consumed within the
+    // page.
+    if (event.request.headers.get('accept')?.split(',').includes('text/html')) {
+      manifestCache.invalidateManifest();
+    }
 
-      if (response && url.searchParams.get('untranspiled') != null) {
+    let cacheEnabled = url.searchParams.get('nocache') == null;
+
+    return manifestCache.through(
+      event.request,
+      cacheEnabled,
+      async (depend) => {
+        let response = await handleSynthesizedFile(url.pathname);
+
+        if (response && url.searchParams.get('untranspiled') != null) {
+          return response;
+        }
+
+        if (!response) {
+          response = await fetch(event.request);
+          depend.on(response);
+        }
+        let { media, forwardHeaders } = mediaType(response);
+        switch (media.type) {
+          case 'text/html':
+            return await transformHTML(url.pathname, response, forwardHeaders);
+          case 'application/javascript':
+            return await transformJS.run(
+              url.pathname,
+              response,
+              forwardHeaders
+            );
+          case 'application/vnd.glimmer.hbs':
+            return await transformHBS.run(
+              url.pathname,
+              response,
+              forwardHeaders
+            );
+        }
         return response;
       }
-
-      if (!response) {
-        response = await fetch(event.request);
-      }
-      dependsOn(response);
-      let { media, forwardHeaders } = mediaType(response);
-      switch (media.type) {
-        case 'text/html':
-          return await transformHTML(url.pathname, response, forwardHeaders);
-        case 'application/javascript':
-          return await transformJS.run(url.pathname, response, forwardHeaders);
-        case 'application/vnd.glimmer.hbs':
-          return await transformHBS.run(url.pathname, response, forwardHeaders);
-      }
-      return response;
-    });
+    );
   } catch (err) {
     console.error(err);
     return new Response(`unexpected exception in service worker ${err}`, {

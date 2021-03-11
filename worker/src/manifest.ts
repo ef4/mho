@@ -4,6 +4,98 @@ import { Minimatch } from 'minimatch';
 
 type Manifest = { files: Record<string, string>; excluded: string[] };
 
+export class DependencyTracker {
+  private cacheable = true;
+
+  // array of [manifestQuery, cacheKey], where the cacheKeys are the CRC32
+  // hashed results of matching the manifestQuery against the manifest
+  private tags: [string, string][] = [];
+
+  constructor(private baseURL: string, private manifest: Manifest) {}
+
+  *queryManifest(query: string) {
+    let entries = [];
+    let hash = new Crc32();
+    for (let { path, etag } of matchingManifestEntries(this.manifest, query)) {
+      entries.push(path);
+      hash.update(encoder.encode(path));
+      hash.update(encoder.encode(etag));
+    }
+    this.tags.push([query, String(hash.digest())]);
+    return entries;
+  }
+
+  on(response: Response): void {
+    if (!this.cacheable) {
+      // somebody else already made this whole response uncachable, so there's
+      // no point in tracking anything else
+      return;
+    }
+
+    let cacheControl = response.headers.get('cache-control');
+    if (cacheControl && /max-age=604800/.test(cacheControl)) {
+      // this dependency wants us to consider it immutable, so we oblige by
+      // promptly forgetting about it. This is the plan for third-party bundles.
+      // They should have versioning in their own URLs.
+      return;
+    }
+
+    if (!response.url.startsWith(this.baseURL + '/')) {
+      // this dependency is outside the scope of our manifest, so our system
+      // can't track it
+      this.cacheable = false;
+      return;
+    }
+
+    let local = response.url.replace(this.baseURL, '');
+    for (let excluded of this.manifest.excluded) {
+      if (excluded.endsWith('/')) {
+        if (local.startsWith(excluded)) {
+          this.cacheable = false;
+          // this dependency is not covered by our manifest
+          return;
+        }
+      } else {
+        if (excluded === local) {
+          this.cacheable = false;
+          // this dependency is not covered by our manifest
+          return;
+        }
+      }
+    }
+
+    if (response.status === 404) {
+      // we can account for *not* finding a file just a well as we can account
+      // for finding it. The idea is, you've queried the manifest for that name
+      // and came back with nothing, which would hash to the digest of nothing.
+      // That way, if later the file shows up in the manifest, it will
+      // invalidate this tag.
+      this.tags.push([local, String(new Crc32().digest())]);
+      return;
+    }
+
+    let etagHeader = response.headers.get('etag');
+    if (!etagHeader) {
+      // things in our manifest are cached off their etags. If we don't have
+      // one, there's no way to ensure cache integrity for this response.
+      this.cacheable = false;
+      return;
+    }
+    let etag = etagHeader.slice(1, -1);
+    let hash = new Crc32();
+    hash.update(encoder.encode(local));
+    hash.update(encoder.encode(etag));
+    this.tags.push([local, String(hash.digest())]);
+  }
+
+  generateHeader(): string | undefined {
+    if (!this.cacheable) {
+      return undefined;
+    }
+    return JSON.stringify(this.tags);
+  }
+}
+
 export class ManifestCache {
   getManifest: () => Promise<Manifest>;
   invalidateManifest: () => void;
@@ -35,86 +127,79 @@ export class ManifestCache {
   // deps change in the manifest.
   async through(
     request: Request,
-    handler: (dependsOn: (response: Response) => void) => Promise<Response>
+    cacheEnabled: boolean,
+    handler: (depend: DependencyTracker) => Promise<Response>
   ): Promise<Response> {
     let cache = await this.openCache();
-    let [response, manifest] = await Promise.all([
+    let [cachedResponse, manifest] = await Promise.all([
       cache.match(request),
       this.getManifest(),
     ]);
 
-    if (response) {
-      let cacheControl = response.headers.get('cache-control');
-      if (cacheControl && /max-age=604800/.test(cacheControl)) {
-        return response;
-      }
-
-      let depHeader = response.headers.get('X-Manifest-Dep');
-      if (depHeader) {
-        let deps = JSON.parse(depHeader) as [string, string][];
+    if (!cacheEnabled) {
+      console.log(`cache disabled ${request.url}`);
+    } else if (cachedResponse) {
+      let xManifestDeps = cachedResponse.headers.get('x-manifest-deps');
+      if (xManifestDeps) {
+        let deps = JSON.parse(xManifestDeps) as [string, string][];
         if (
-          deps.every(
-            ([manifestQuery, cacheTag]) =>
-              this.cacheTagFor(manifest, manifestQuery) === cacheTag
-          )
+          deps.every(([query, key]) => cacheTagFor(manifest, query) === key)
         ) {
-          return response;
+          //console.log(`cache hit ${request.url}`);
+          return cachedResponse;
         }
       }
-
-      // we had matching request but it either lacks X-Manifest-Dep or has a
-      // stale X-Manifest-Dep, so evict it
       await cache.delete(request);
+      console.log(`cache evict ${request.url}`);
+    } else {
+      console.log(`cache miss ${request.url}`);
     }
 
-    let tracked = [];
-    const dependsOn = (dep: Response) => {
-      if (dep.url.startsWith(this.baseURL + '/')) {
-        let local = dep.url.replace(this.baseURL, '');
-        for (let excluded of manifest.excluded) {
-          if (excluded.endsWith('/')) {
-            if (local.startsWith(excluded)) {
-              console.log(`excluded ${dep.url} because of ${excluded} prefix`);
-              return;
-            }
-          } else {
-            if (excluded === local) {
-              console.log(
-                `excluded ${dep.url} because of ${excluded} exact mach`
-              );
-              return;
-            }
-          }
-        }
-        //console.log(`not excluding ${dep.url}`);
-        tracked.push([local, dep.headers.get('etag')]);
-      } else {
-        console.log(
-          `excluded ${dep.url} because its outside base ${this.baseURL}`
-        );
-      }
-    };
+    let depend = new DependencyTracker(this.baseURL, manifest);
+    let freshResponse = await handler(depend);
+    let xManifestDeps = depend.generateHeader();
+    if (xManifestDeps) {
+      // we need the clone to not steal the body from the consumer we're
+      // returning to
+      let cloned = freshResponse.clone();
+      let headers = new Headers(cloned.headers);
+      headers.set('x-manifest-deps', xManifestDeps);
 
-    response = await handler(dependsOn);
-    if (response.status === 200) {
-      await cache.put(request, response.clone());
+      // but we also need to modify the headers, so we need to invoke the constructor again
+      await cache.put(
+        request,
+        new Response(cloned.body, {
+          headers,
+          status: cloned.status,
+          statusText: cloned.statusText,
+        })
+      );
     }
-    return response;
+    return freshResponse;
   }
+}
 
-  // this lets you say things like cacheTagFor('/app/components/foo.js') or
-  // cacheTagFor('/app/templates/**/*.hbs')
-  private cacheTagFor(manifest: Manifest, manifestQuery: string): string {
-    let hash = new Crc32();
-    let pattern = new Minimatch(manifestQuery);
-    for (let [filename, etag] of Object.entries(manifest.files)) {
-      if (pattern.match(filename)) {
-        hash.update(encoder.encode(filename));
-        hash.update(encoder.encode(etag));
-      }
+function* matchingManifestEntries(
+  manifest: Manifest,
+  query: string
+): Generator<{ path: string; etag: string }> {
+  let pattern = new Minimatch(query);
+  for (let [path, etag] of Object.entries(manifest.files)) {
+    if (pattern.match(path)) {
+      yield { path, etag };
     }
-    return String(hash.digest());
   }
+}
+
+// this lets you say things like cacheTagFor('/app/components/foo.js') or
+// cacheTagFor('/app/templates/**/*.hbs')
+function cacheTagFor(manifest: Manifest, manifestQuery: string): string {
+  let hash = new Crc32();
+  for (let { path, etag } of matchingManifestEntries(manifest, manifestQuery)) {
+    hash.update(encoder.encode(path));
+    hash.update(encoder.encode(etag));
+  }
+  return String(hash.digest());
 }
 
 const encoder = new TextEncoder();
