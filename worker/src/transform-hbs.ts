@@ -6,7 +6,7 @@ export class TransformHBS {
 
   constructor(private mapper: ImportMapper) {}
 
-  private templateCompiler(): Promise<TemplateCompiler> {
+  templateCompiler(): Promise<TemplateCompiler> {
     if (!this.loadPromise) {
       this.loadPromise = this.loadTemplateCompiler();
       this.loadPromise.catch((err) => {

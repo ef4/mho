@@ -1,10 +1,10 @@
 import { parse, resolve, ParsedImportMap } from '@import-maps/resolve';
-import { cacheFor } from './cache-for';
+import { cacheFor } from './cache-util';
 
 export class ImportMapper {
   readonly baseURL: URL;
 
-  private constructor(baseURL: string, private mapURL: string) {
+  constructor(baseURL: string, private mapURL: string) {
     this.baseURL = new URL(baseURL);
   }
 

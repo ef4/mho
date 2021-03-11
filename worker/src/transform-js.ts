@@ -9,13 +9,22 @@ import debugMacros from 'babel-plugin-debug-macros';
 import modulesAPI from 'babel-plugin-ember-modules-api-polyfill';
 import runtime from '@babel/plugin-transform-runtime';
 import { ImportMapper } from './import-mapper';
+import makeInlineHBS from '@embroider/core/src/babel-plugin-inline-hbs';
+import { TransformHBS } from './transform-hbs';
 
 const macrosConfig = MacrosConfig.for(self);
 
 export class TransformJS {
-  constructor(private mapper: ImportMapper) {}
+  constructor(
+    private mapper: ImportMapper,
+    private transformHBS: TransformHBS,
+    private passthrough: string[]
+  ) {}
 
   private async plugins(): Promise<TransformOptions['plugins']> {
+    let templateCompiler = await this.transformHBS.templateCompiler();
+    const inlineHBS = makeInlineHBS(() => templateCompiler);
+
     return [
       [
         decorators,
@@ -75,7 +84,7 @@ export class TransformJS {
           },
         },
       ],
-      // TODO: embroider's babel-plugin-inline-hbs
+      [inlineHBS, { stage: 3 }],
       [macrosPlugin, (macrosConfig.babelPluginConfig() as any)[1]],
       // TODO: embroider's template colocation plugin
       [
@@ -100,6 +109,9 @@ export class TransformJS {
     response: Response,
     forwardHeaders: Headers
   ): Promise<Response> {
+    if (this.passthrough.includes(filename)) {
+      return response;
+    }
     let source = await response.text();
     let result = transformSync(source, {
       filename,

@@ -4,6 +4,8 @@ import { TransformJS } from './transform-js';
 import { TransformHBS } from './transform-hbs';
 import { handleSynthesizedFile } from './synthesize-files';
 import { ImportMapper } from './import-mapper';
+import { ManifestCache } from './manifest';
+import { transformHTML } from './transform-html';
 
 const worker = (self as unknown) as ServiceWorkerGlobalScope;
 let livenessWatcher = new LivenessWatcher(worker);
@@ -19,11 +21,17 @@ worker.addEventListener('activate', () => {
   console.log('activating service worker');
 });
 
+// TODO: this won't be needed once we are synthesizes vendor.js
+let excludeFromTranspilation = ['/assets/vendor.js'];
+
 let mapper = new ImportMapper(worker.origin, '/importmap.json');
-
-let transformJS = new TransformJS(mapper);
-
 let transformHBS = new TransformHBS(mapper);
+let transformJS = new TransformJS(
+  mapper,
+  transformHBS,
+  excludeFromTranspilation
+);
+let manifestCache = new ManifestCache(worker.origin);
 
 worker.addEventListener('fetch', (event: FetchEvent) => {
   event.respondWith(handleFetch(event));
@@ -42,18 +50,23 @@ async function handleFetch(event: FetchEvent): Promise<Response> {
       return await fetch(event.request);
     }
 
-    let response =
-      (await handleSynthesizedFile(url.pathname)) ??
-      (await fetch(event.request));
-
-    let { media, forwardHeaders } = mediaType(response);
-    switch (media.type) {
-      case 'application/javascript':
-        return await transformJS.run(url.pathname, response, forwardHeaders);
-      case 'application/vnd.glimmer.hbs':
-        return await transformHBS.run(url.pathname, response, forwardHeaders);
-    }
-    return response;
+    return manifestCache.through(event.request, async (dependsOn) => {
+      let response = await handleSynthesizedFile(url.pathname);
+      if (!response) {
+        response = await fetch(event.request);
+      }
+      dependsOn(response);
+      let { media, forwardHeaders } = mediaType(response);
+      switch (media.type) {
+        case 'text/html':
+          return await transformHTML(url.pathname, response, forwardHeaders);
+        case 'application/javascript':
+          return await transformJS.run(url.pathname, response, forwardHeaders);
+        case 'application/vnd.glimmer.hbs':
+          return await transformHBS.run(url.pathname, response, forwardHeaders);
+      }
+      return response;
+    });
   } catch (err) {
     console.error(err);
     return new Response(`unexpected exception in service worker ${err}`, {

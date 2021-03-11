@@ -42,18 +42,13 @@ fn is_node_modules(entry: &DirEntry) -> bool {
 }
 
 fn summarize(entry: &DirEntry, root: &Path) -> Option<(String, String)> {
-    let name = entry.path().strip_prefix(root).ok()?.to_str()?;
+    let name = PathBuf::from("/").join(entry.path().strip_prefix(root).ok()?);
     let meta = fs::metadata(entry.path()).ok()?;
     let modified = meta.modified().ok()?;
     let duration = modified
         .duration_since(std::time::SystemTime::UNIX_EPOCH)
         .ok()?;
-    Some((name.to_owned(), duration.as_secs().to_string()))
-}
-
-#[derive(Serialize, Deserialize)]
-struct Manifest {
-    etags: std::collections::BTreeMap<String, String>,
+    Some((name.to_str()?.to_owned(), duration.as_secs().to_string()))
 }
 
 #[get("/")]
@@ -61,9 +56,21 @@ fn bootstrap() -> Html<&'static str> {
     Html("<!DOCTYPE html><body data-launching-service-worker><script type=\"module\" src=\"/client.js\"></script>Launching service worker...</body>")
 }
 
+#[derive(Serialize, Deserialize)]
+struct Manifest {
+    // the etag for each URL on our origin. If it's not present here, it doesn't
+    // exist, with the exception of the exclude list below.
+    files: std::collections::BTreeMap<String, String>,
+
+    // list of urls or url prefixes (ones ending in "/") that are not considered
+    // part of our manifest. If they're not in the manifest, that doesn't mean
+    // they don't exist.
+    excluded: Vec<String>,
+}
+
 #[get("/manifest")]
 fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
-    let mut etags = BTreeMap::new();
+    let mut files = BTreeMap::new();
     let walker = WalkDir::new(&project.root)
         .into_iter()
         .filter_entry(|e| !is_hidden(e) && !is_node_modules(e))
@@ -71,11 +78,18 @@ fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
     for entry in walker {
         if entry.file_type().is_file() {
             if let Some((name, etag)) = summarize(&entry, &project.root) {
-                etags.insert(name, etag);
+                files.insert(name, etag);
             }
         }
     }
-    Json(Manifest { etags })
+    Json(Manifest {
+        files,
+        excluded: vec![
+            "/deps/".to_string(),
+            "/client.js".to_string(),
+            "/worker.js".to_string(),
+        ],
+    })
 }
 
 #[get("/<path..>", rank = 9)]
