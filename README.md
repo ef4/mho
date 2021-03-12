@@ -2,14 +2,7 @@
 
 current goal: minimum viable in-service-worker stage2
 
-NEXT: get app booting again with no wildcard scaffolding
-
-- discover addons with app-js by crawling package.json starting with ours and using the importmap between them
-  THEN: basics of caching with our manifest
-
 # TODOs
-
-had to manually patch @ember/test-waiters type-only exports
 
 clean up extra things in embroider/core's package.json exports, once we port core code back into core
 

@@ -15,10 +15,12 @@ import { TransformHBS } from './transform-hbs';
 const macrosConfig = MacrosConfig.for(self);
 
 export class TransformJS {
+  // TODO: this won't be needed once we are synthesizes vendor.js
+  private passthrough = ['/assets/vendor.js'];
+
   constructor(
     private mapper: ImportMapper,
-    private transformHBS: TransformHBS,
-    private passthrough: string[]
+    private transformHBS: TransformHBS
   ) {}
 
   private async plugins(): Promise<TransformOptions['plugins']> {
