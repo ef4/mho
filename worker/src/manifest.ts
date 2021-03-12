@@ -104,8 +104,8 @@ export class DependencyTracker {
   }
 
   onAndRequestCached(
-    request: Request,
-    handler: (depend: DependencyTracker) => Promise<Response>
+    request: Request | string,
+    handler?: (depend: DependencyTracker) => Promise<Response>
   ) {
     return this.manifestCache.requestCached(request, true, handler, this);
   }
@@ -128,6 +128,10 @@ export class DependencyTracker {
     for (let pair of pairs) {
       this.addTag(...pair);
     }
+  }
+
+  isVolatile() {
+    this.cacheable = false;
   }
 
   private parent: DependencyTracker | undefined;
@@ -163,11 +167,15 @@ export class ManifestCache {
   // keep returning the same response for matching requests until any of those
   // deps change in the manifest.
   async requestCached(
-    request: Request,
+    request: Request | string,
     cacheEnabled: boolean,
-    handler: (depend: DependencyTracker) => Promise<Response>,
+    handler?: (depend: DependencyTracker) => Promise<Response>,
     parentTracker?: DependencyTracker
   ): Promise<Response> {
+    if (typeof request === 'string') {
+      request = new Request(request);
+    }
+
     let cache = await this.openCache();
     let [cachedResponse, manifest] = await Promise.all([
       cache.match(request),
@@ -192,7 +200,12 @@ export class ManifestCache {
     }
 
     let depend = new DependencyTracker(this, this.baseURL, manifest);
-    let freshResponse = await handler(depend);
+    let freshResponse: Response;
+    if (handler) {
+      freshResponse = await handler(depend);
+    } else {
+      freshResponse = await fetch(request);
+    }
     parentTracker?.addTags(depend.tags);
     let xManifestDeps = depend.generateHeader();
     if (xManifestDeps) {
@@ -229,8 +242,9 @@ export class ManifestCache {
     // caching part happens in runWorkThrough.
     let working = this.working.get(key);
     if (working) {
-      // TODO in this case we still need to entangle your dependency tracker
-      // with the answer
+      // this is easier than entangling the parent tracker with the eventual
+      // cache tags that resolve, and it maintains consistency.
+      parentTracker?.isVolatile();
       return working;
     }
 

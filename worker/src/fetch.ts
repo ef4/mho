@@ -48,7 +48,11 @@ export class FetchHandler {
         event.request,
         cacheEnabled,
         async (depend) => {
-          let response = await handleSynthesizedFile(url.pathname, depend);
+          let response = await handleSynthesizedFile(
+            url.pathname,
+            depend,
+            this.mapper
+          );
 
           if (response && url.searchParams.get('untranspiled') != null) {
             return response;

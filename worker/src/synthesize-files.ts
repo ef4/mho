@@ -1,9 +1,12 @@
+import { addonMeta } from './addon-meta';
 import { emberJSEntrypoint } from './ember-entrypoint';
+import { ImportMapper } from './import-mapper';
 import { DependencyTracker } from './manifest';
 
 export async function handleSynthesizedFile(
   pathname: string,
-  depend: DependencyTracker
+  depend: DependencyTracker,
+  mapper: ImportMapper
 ): Promise<Response | undefined> {
   switch (pathname) {
     case '/assets/vendor.js':
@@ -20,6 +23,8 @@ export async function handleSynthesizedFile(
       return response;
     case '/_entry_/index.js':
       return emberJSEntrypoint(depend);
+    case '/_addon_meta_test':
+      return addonMetaTest(depend, mapper);
   }
   return undefined;
 }
@@ -31,4 +36,9 @@ async function scaffold(
   let response = await fetch(`/scaffolding${stage2Name}`);
   depend.on(response);
   return response;
+}
+
+async function addonMetaTest(depend: DependencyTracker, mapper: ImportMapper) {
+  let meta = await addonMeta(depend, mapper);
+  return new Response(JSON.stringify(Object.fromEntries(meta), null, 2));
 }
