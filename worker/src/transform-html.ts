@@ -1,10 +1,10 @@
 import parse5 from 'parse5';
+import { TransformParams } from './transform';
 
-export async function transformHTML(
-  filename: string,
-  response: Response,
-  forwardHeaders: Headers
-): Promise<Response> {
+export const transformHTML = async function transformHTML({
+  response,
+  forwardHeaders,
+}: TransformParams): Promise<Response> {
   if (response.status !== 200) {
     return response;
   }
@@ -17,7 +17,7 @@ export async function transformHTML(
     status: response.status,
     statusText: response.statusText,
   });
-}
+};
 
 // TODO
 function contentFor(_section: string) {

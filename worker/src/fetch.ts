@@ -1,18 +1,18 @@
-import { TransformJS } from './transform-js';
-import { TransformHBS } from './transform-hbs';
+import { transformJS } from './transform-js';
+import { transformHBS } from './transform-hbs';
 import { handleSynthesizedFile } from './synthesize-files';
 import { ImportMapper } from './import-mapper';
 import { ManifestCache } from './manifest';
 import { transformHTML } from './transform-html';
 import { mediaType } from './media-type';
+import { Transform } from './transform';
 
 export class FetchHandler {
   constructor(private origin: string) {}
 
-  private mapper = new ImportMapper(this.origin, '/importmap.json');
-  private transformHBS = new TransformHBS(this.mapper);
-  private transformJS = new TransformJS(this.mapper, this.transformHBS);
   private manifestCache = new ManifestCache(this.origin);
+
+  private mapper = new ImportMapper(this.origin, '/importmap.json');
 
   async handleFetch(event: FetchEvent, alive: boolean): Promise<Response> {
     try {
@@ -40,7 +40,7 @@ export class FetchHandler {
 
       let cacheEnabled = url.searchParams.get('nocache') == null;
 
-      return this.manifestCache.through(
+      return this.manifestCache.requestCached(
         event.request,
         cacheEnabled,
         async (depend) => {
@@ -55,25 +55,15 @@ export class FetchHandler {
             depend.on(response);
           }
           let { media, forwardHeaders } = mediaType(response);
-          switch (media.type) {
-            case 'text/html':
-              return await transformHTML(
-                url.pathname,
-                response,
-                forwardHeaders
-              );
-            case 'application/javascript':
-              return await this.transformJS.run(
-                url.pathname,
-                response,
-                forwardHeaders
-              );
-            case 'application/vnd.glimmer.hbs':
-              return await this.transformHBS.run(
-                url.pathname,
-                response,
-                forwardHeaders
-              );
+          let transform = transformFor(media.type);
+          if (transform) {
+            return await transform({
+              pathname: url.pathname,
+              response,
+              forwardHeaders,
+              mapper: this.mapper,
+              depend,
+            });
           }
           return response;
         }
@@ -85,4 +75,16 @@ export class FetchHandler {
       });
     }
   }
+}
+
+function transformFor(mediaType: string): Transform | undefined {
+  switch (mediaType) {
+    case 'text/html':
+      return transformHTML;
+    case 'application/javascript':
+      return transformJS;
+    case 'application/vnd.glimmer.hbs':
+      return transformHBS;
+  }
+  return undefined;
 }

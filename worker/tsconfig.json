@@ -19,6 +19,8 @@
     "strictPropertyInitialization": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
+    "skipLibCheck": true,
+    "noEmit": true,
     "lib": ["ES2020", "ScriptHost", "WebWorker", "WebWorker.ImportScripts"]
   }
 }

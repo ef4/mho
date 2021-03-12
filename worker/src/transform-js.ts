@@ -8,124 +8,124 @@ import classProperties from '@babel/plugin-proposal-class-properties';
 import debugMacros from 'babel-plugin-debug-macros';
 import modulesAPI from 'babel-plugin-ember-modules-api-polyfill';
 import runtime from '@babel/plugin-transform-runtime';
-import { ImportMapper } from './import-mapper';
 import makeInlineHBS from '@embroider/core/src/babel-plugin-inline-hbs';
-import { TransformHBS } from './transform-hbs';
+import { Transform, TransformParams } from './transform';
+import { loadTemplateCompiler } from './template-compiler';
 
 const macrosConfig = MacrosConfig.for(self);
 
-export class TransformJS {
-  // TODO: this won't be needed once we are synthesizes vendor.js
-  private passthrough = ['/assets/vendor.js'];
+// TODO: this won't be needed once we are synthesizes vendor.js
+const passthrough = ['/assets/vendor.js'];
 
-  constructor(
-    private mapper: ImportMapper,
-    private transformHBS: TransformHBS
-  ) {}
-
-  private async plugins(): Promise<TransformOptions['plugins']> {
-    let templateCompiler = await this.transformHBS.templateCompiler();
-    const inlineHBS = makeInlineHBS(() => templateCompiler);
-
-    return [
-      [
-        decorators,
-        {
-          legacy: true,
-        },
-      ],
-      [
-        classProperties,
-        {
-          loose: false,
-        },
-      ],
-      [
-        debugMacros,
-        {
-          flags: [
-            {
-              source: '@glimmer/env',
-              flags: {
-                DEBUG: true,
-                CI: false,
-              },
-            },
-          ],
-          externalizeHelpers: {
-            global: 'Ember',
-          },
-          debugTools: {
-            isDebug: true,
-            source: '@ember/debug',
-            assertPredicateIndex: 1,
-          },
-        },
-        '@ember/debug stripping',
-      ],
-      [
-        debugMacros,
-        {
-          externalizeHelpers: {
-            global: 'Ember',
-          },
-          debugTools: {
-            isDebug: true,
-            source: '@ember/application/deprecations',
-            assertPredicateIndex: 1,
-          },
-        },
-        '@ember/application/deprecations stripping',
-      ],
-      [
-        modulesAPI,
-        {
-          ignore: {
-            '@ember/debug': ['assert', 'deprecate', 'warn'],
-            '@ember/application/deprecations': ['deprecate'],
-          },
-        },
-      ],
-      [inlineHBS, { stage: 3 }],
-      [macrosPlugin, (macrosConfig.babelPluginConfig() as any)[1]],
-      // TODO: embroider's template colocation plugin
-      [
-        runtime,
-        {
-          useESModules: true,
-          regenerator: false,
-        },
-      ],
-      ts,
-      [
-        remap,
-        {
-          mapper: await this.mapper.snapshot(),
-        } as RemapOptions,
-      ],
-    ];
-  }
-
-  async run(
-    filename: string,
-    response: Response,
-    forwardHeaders: Headers
-  ): Promise<Response> {
-    if (this.passthrough.includes(filename)) {
-      return response;
+async function plugins({
+  depend,
+  mapper,
+}: TransformParams): Promise<TransformOptions['plugins']> {
+  let templateCompiler = await depend.onAndWorkCached(
+    loadTemplateCompiler,
+    (innerDepend) => {
+      return loadTemplateCompiler(mapper, innerDepend);
     }
-    let source = await response.text();
-    let result = transformSync(source, {
-      filename,
-      plugins: await this.plugins(),
-      generatorOpts: {
-        compact: false,
+  );
+  const inlineHBS = makeInlineHBS(() => templateCompiler);
+
+  return [
+    [
+      decorators,
+      {
+        legacy: true,
       },
-    });
-    return new Response(result!.code, {
-      headers: forwardHeaders,
-      status: response.status,
-      statusText: response.statusText,
-    });
-  }
+    ],
+    [
+      classProperties,
+      {
+        loose: false,
+      },
+    ],
+    [
+      debugMacros,
+      {
+        flags: [
+          {
+            source: '@glimmer/env',
+            flags: {
+              DEBUG: true,
+              CI: false,
+            },
+          },
+        ],
+        externalizeHelpers: {
+          global: 'Ember',
+        },
+        debugTools: {
+          isDebug: true,
+          source: '@ember/debug',
+          assertPredicateIndex: 1,
+        },
+      },
+      '@ember/debug stripping',
+    ],
+    [
+      debugMacros,
+      {
+        externalizeHelpers: {
+          global: 'Ember',
+        },
+        debugTools: {
+          isDebug: true,
+          source: '@ember/application/deprecations',
+          assertPredicateIndex: 1,
+        },
+      },
+      '@ember/application/deprecations stripping',
+    ],
+    [
+      modulesAPI,
+      {
+        ignore: {
+          '@ember/debug': ['assert', 'deprecate', 'warn'],
+          '@ember/application/deprecations': ['deprecate'],
+        },
+      },
+    ],
+    [inlineHBS, { stage: 3 }],
+    [macrosPlugin, (macrosConfig.babelPluginConfig() as any)[1]],
+    // TODO: embroider's template colocation plugin
+    [
+      runtime,
+      {
+        useESModules: true,
+        regenerator: false,
+      },
+    ],
+    ts,
+    [
+      remap,
+      {
+        mapper: await mapper.snapshot(),
+      } as RemapOptions,
+    ],
+  ];
 }
+
+export const transformJS: Transform = async function transformJS(
+  params: TransformParams
+): Promise<Response> {
+  let { pathname, response, forwardHeaders } = params;
+  if (passthrough.includes(pathname)) {
+    return response;
+  }
+  let source = await response.text();
+  let result = transformSync(source, {
+    filename: pathname,
+    plugins: await plugins(params),
+    generatorOpts: {
+      compact: false,
+    },
+  });
+  return new Response(result!.code, {
+    headers: forwardHeaders,
+    status: response.status,
+    statusText: response.statusText,
+  });
+};

@@ -11,9 +11,16 @@ export class DependencyTracker {
   // hashed results of matching the manifestQuery against the manifest
   private tags: [string, string][] = [];
 
-  constructor(private baseURL: string, private manifest: Manifest) {}
+  constructor(
+    private manifestCache: ManifestCache,
+    private baseURL: string,
+    private manifest: Manifest
+  ) {}
 
-  *queryManifest(query: string) {
+  // this is how you can check for arbitrary file patterns within the app. When
+  // you do, you're entangling your cache state with any future changes to the
+  // answer you got back.
+  queryManifest(query: string) {
     let entries = [];
     let hash = new Crc32();
     for (let { path, etag } of matchingManifestEntries(this.manifest, query)) {
@@ -21,10 +28,11 @@ export class DependencyTracker {
       hash.update(encoder.encode(path));
       hash.update(encoder.encode(etag));
     }
-    this.tags.push([query, String(hash.digest())]);
+    this.addTag(query, String(hash.digest()));
     return entries;
   }
 
+  // this is how you report that you depended on a network resource
   on(response: Response): void {
     if (!this.cacheable) {
       // somebody else already made this whole response uncachable, so there's
@@ -70,7 +78,7 @@ export class DependencyTracker {
       // and came back with nothing, which would hash to the digest of nothing.
       // That way, if later the file shows up in the manifest, it will
       // invalidate this tag.
-      this.tags.push([local, String(new Crc32().digest())]);
+      this.addTag(local, String(new Crc32().digest()));
       return;
     }
 
@@ -85,7 +93,7 @@ export class DependencyTracker {
     let hash = new Crc32();
     hash.update(encoder.encode(local));
     hash.update(encoder.encode(etag));
-    this.tags.push([local, String(hash.digest())]);
+    this.addTag(local, String(hash.digest()));
   }
 
   generateHeader(): string | undefined {
@@ -94,6 +102,35 @@ export class DependencyTracker {
     }
     return JSON.stringify(this.tags);
   }
+
+  onAndRequestCached(
+    request: Request,
+    handler: (depend: DependencyTracker) => Promise<Response>
+  ) {
+    return this.manifestCache.requestCached(request, true, handler, this);
+  }
+
+  onAndWorkCached<K extends object, T>(
+    key: K,
+    fn: (depend: DependencyTracker) => Promise<T>
+  ): Promise<T> {
+    return this.manifestCache.workCached(key, fn, this);
+  }
+
+  addTag(query: string, tag: string): void {
+    this.tags.push([query, tag]);
+    if (this.parent) {
+      this.parent.addTag(query, tag);
+    }
+  }
+
+  addTags(pairs: [string, string][]): void {
+    for (let pair of pairs) {
+      this.addTag(...pair);
+    }
+  }
+
+  private parent: DependencyTracker | undefined;
 }
 
 export class ManifestCache {
@@ -125,10 +162,11 @@ export class ManifestCache {
   // to say which entries in the manifest they depend on, and the cache will
   // keep returning the same response for matching requests until any of those
   // deps change in the manifest.
-  async through(
+  async requestCached(
     request: Request,
     cacheEnabled: boolean,
-    handler: (depend: DependencyTracker) => Promise<Response>
+    handler: (depend: DependencyTracker) => Promise<Response>,
+    parentTracker?: DependencyTracker
   ): Promise<Response> {
     let cache = await this.openCache();
     let [cachedResponse, manifest] = await Promise.all([
@@ -139,15 +177,13 @@ export class ManifestCache {
     if (!cacheEnabled) {
       console.log(`cache disabled ${request.url}`);
     } else if (cachedResponse) {
-      let xManifestDeps = cachedResponse.headers.get('x-manifest-deps');
-      if (xManifestDeps) {
-        let deps = JSON.parse(xManifestDeps) as [string, string][];
-        if (
-          deps.every(([query, key]) => cacheTagFor(manifest, query) === key)
-        ) {
-          //console.log(`cache hit ${request.url}`);
-          return cachedResponse;
-        }
+      let tags = parseXManifestDeps(
+        cachedResponse.headers.get('x-manifest-deps')
+      );
+      if (valid(manifest, tags)) {
+        //console.log(`cache hit ${request.url}`);
+        parentTracker?.addTags(tags);
+        return cachedResponse;
       }
       await cache.delete(request);
       console.log(`cache evict ${request.url}`);
@@ -155,7 +191,7 @@ export class ManifestCache {
       console.log(`cache miss ${request.url}`);
     }
 
-    let depend = new DependencyTracker(this.baseURL, manifest);
+    let depend = new DependencyTracker(this, this.baseURL, manifest);
     let freshResponse = await handler(depend);
     let xManifestDeps = depend.generateHeader();
     if (xManifestDeps) {
@@ -176,6 +212,73 @@ export class ManifestCache {
       );
     }
     return freshResponse;
+  }
+
+  private working = new WeakMap<object, Promise<any>>();
+
+  // Cache arbitrary work relative to the manifest. This is WeakMap based. The
+  // same key will return the same cached answer as long as none of the
+  // dependencies you reported via the DependencyTracker have changed.
+  async workCached<K extends Object, T>(
+    key: K,
+    fn: (depend: DependencyTracker) => Promise<T>,
+    parentTracker?: DependencyTracker
+  ): Promise<T> {
+    // this implementation is all about controlling concurrency. The actual
+    // caching part happens in runWorkThrough.
+    let working = this.working.get(key);
+    if (working) {
+      return working;
+    }
+
+    let resolve: (value: T) => void;
+    let reject: (err: any) => void;
+    let promise = new Promise((r, e) => {
+      resolve = r;
+      reject = e;
+    });
+    this.working.set(key, promise);
+    try {
+      let result = await this.runWorkCached(key, fn, parentTracker);
+      resolve!(result);
+      return result;
+    } catch (err) {
+      reject!(err);
+    } finally {
+      this.working.delete(key);
+    }
+    // typescript is being silly and insisting I put a return statement here.
+    return (undefined as unknown) as Promise<T>;
+  }
+
+  private workCache = new WeakMap<object, { value: any; tag: string }>();
+
+  private async runWorkCached<K extends Object, T>(
+    key: K,
+    fn: (depend: DependencyTracker) => Promise<T>,
+    parentTracker?: DependencyTracker
+  ) {
+    let cached = this.workCache.get(key);
+    let manifest = await this.getManifest();
+    if (cached) {
+      let tags = parseXManifestDeps(cached.tag);
+      if (valid(manifest, tags)) {
+        console.log(`work cache hit`, key);
+        parentTracker?.addTags(tags);
+        return cached.value;
+      }
+      console.log(`work cache evict`, key);
+      this.workCache.delete(key);
+    } else {
+      console.log(`work cache miss`, key);
+    }
+    let depend = new DependencyTracker(this, this.baseURL, manifest);
+    let freshValue = await fn(depend);
+    let tag = depend.generateHeader();
+    if (tag) {
+      this.workCache.set(key, { value: freshValue, tag });
+    }
+    return freshValue;
   }
 }
 
@@ -200,6 +303,22 @@ function cacheTagFor(manifest: Manifest, manifestQuery: string): string {
     hash.update(encoder.encode(etag));
   }
   return String(hash.digest());
+}
+
+function parseXManifestDeps(xManifestDeps: string | null) {
+  if (!xManifestDeps) {
+    return null;
+  }
+  return JSON.parse(xManifestDeps) as [string, string][];
+}
+
+function valid(
+  manifest: Manifest,
+  deps: null | [string, string][]
+): deps is [string, string][] {
+  return Boolean(
+    deps && deps.every(([query, key]) => cacheTagFor(manifest, query) === key)
+  );
 }
 
 const encoder = new TextEncoder();
