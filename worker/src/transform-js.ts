@@ -111,13 +111,13 @@ async function plugins({
 export const transformJS: Transform = async function transformJS(
   params: TransformParams
 ): Promise<Response> {
-  let { pathname, response, forwardHeaders } = params;
-  if (passthrough.includes(pathname)) {
+  let { relativePath, response, forwardHeaders, request } = params;
+  if (relativePath && passthrough.includes(relativePath)) {
     return response;
   }
   let source = await response.text();
   let result = transformSync(source, {
-    filename: pathname,
+    filename: request.url,
     plugins: await plugins(params),
     generatorOpts: {
       compact: false,

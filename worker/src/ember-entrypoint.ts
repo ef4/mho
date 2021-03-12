@@ -194,6 +194,11 @@ let amdModules = [
     buildtime: '../app/templates/application.hbs',
   },
   {
+    runtime: 'ember-app/templates/second',
+    buildtime: '../app/templates/second.hbs',
+  },
+
+  {
     runtime: '@ember-data/model/-private',
     buildtime: '@ember-data/model/-private',
   },

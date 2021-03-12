@@ -48,28 +48,17 @@ export class DependencyTracker {
       return;
     }
 
-    if (!response.url.startsWith(this.baseURL + '/')) {
+    if (!response.url.startsWith(this.baseURL)) {
       // this dependency is outside the scope of our manifest, so our system
       // can't track it
       this.cacheable = false;
       return;
     }
 
-    let local = response.url.replace(this.baseURL, '').replace(/\?.*$/, '');
-    for (let excluded of this.manifest.excluded) {
-      if (excluded.endsWith('/')) {
-        if (local.startsWith(excluded)) {
-          this.cacheable = false;
-          // this dependency is not covered by our manifest
-          return;
-        }
-      } else {
-        if (excluded === local) {
-          this.cacheable = false;
-          // this dependency is not covered by our manifest
-          return;
-        }
-      }
+    let local = this.manifestLocalPath(response);
+    if (!local) {
+      // this dependency is not covered by our manifest
+      return;
     }
 
     if (response.status === 404) {
@@ -94,6 +83,26 @@ export class DependencyTracker {
     hash.update(encoder.encode(local));
     hash.update(encoder.encode(etag));
     this.addTag(local, String(hash.digest()));
+  }
+
+  private manifestLocalPath(response: Response): string | undefined {
+    let url = new URL(response.url);
+    if (!url.href.startsWith(this.baseURL)) {
+      return undefined;
+    }
+    let local = (url.origin + url.pathname).replace(this.baseURL, '/');
+    for (let excluded of this.manifest.excluded) {
+      if (excluded.endsWith('/')) {
+        if (local.startsWith(excluded)) {
+          return undefined;
+        }
+      } else {
+        if (excluded === local) {
+          return undefined;
+        }
+      }
+    }
+    return local;
   }
 
   generateHeader(): string | undefined {
@@ -132,6 +141,10 @@ export class DependencyTracker {
 
   isVolatile() {
     this.cacheable = false;
+  }
+
+  invalidateManifest(): void {
+    this.manifestCache.invalidateManifest();
   }
 
   private parent: DependencyTracker | undefined;
@@ -280,14 +293,14 @@ export class ManifestCache {
     if (cached) {
       let tags = parseXManifestDeps(cached.tag);
       if (valid(manifest, tags)) {
-        console.log(`work cache hit`, key);
+        console.log(`work cache hit`, debugKey(key));
         parentTracker?.addTags(tags);
         return cached.value;
       }
-      console.log(`work cache evict`, key);
+      console.log(`work cache evict`, debugKey(key));
       this.workCache.delete(key);
     } else {
-      console.log(`work cache miss`, key);
+      console.log(`work cache miss`, debugKey(key));
     }
     let depend = new DependencyTracker(this, this.baseURL, manifest);
     let freshValue = await fn(depend);
@@ -340,3 +353,17 @@ function valid(
 }
 
 const encoder = new TextEncoder();
+
+function debugKey(obj: any): any {
+  let str;
+  if (typeof obj === 'object' && obj != null) {
+    str = String(obj.constructor || obj);
+  } else {
+    str = String(obj);
+  }
+  let m = /\W*(?:(?:function|class|async)\W*?)*(\w+)\W/.exec(str);
+  if (m) {
+    return m[1];
+  }
+  return obj;
+}

@@ -38,3 +38,7 @@ export function mediaType(
 
   return { media, forwardHeaders };
 }
+
+export function accepts(request: Request, type: string): boolean {
+  return request.headers.get('accept')?.split(',').includes(type) || false;
+}

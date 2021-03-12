@@ -2,6 +2,9 @@
 
 current goal: minimum viable in-service-worker stage2
 
+NEXT: get test suite passing
+THEN: continue on addon-meta crawling
+
 # TODOs
 
 clean up extra things in embroider/core's package.json exports, once we port core code back into core

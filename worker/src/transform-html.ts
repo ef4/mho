@@ -59,7 +59,7 @@ function traverse(node: parse5.Node) {
             nodeName: 'script',
             tagName: 'script',
             attrs: [
-              { name: 'src', value: './_entry_/index.js' },
+              { name: 'src', value: '/_entry_/index.js' },
               { name: 'type', value: 'module' },
             ],
             childNodes: [],
