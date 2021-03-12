@@ -9,6 +9,10 @@ extern crate serde_derive;
 mod tests;
 
 mod cache_headers;
+mod sse;
+mod watch;
+
+use watch::{watch_files, Watching};
 
 use cache_headers::CacheHeaders;
 
@@ -117,6 +121,13 @@ async fn files<'r>(
     }
 }
 
+#[get("/notify")]
+async fn notify<'r>(watch: State<Watching, 'r>) -> Option<{}> {
+    let mut rx = watch.subscribe();
+    rx.recv().await;
+    Some({})
+}
+
 struct ProjectConfig {
     root: PathBuf,
     worker: PathBuf,
@@ -132,6 +143,17 @@ fn rocket() -> rocket::Rocket {
         deps: PathBuf::from("../deps/dist"),
         scaffolding: PathBuf::from("../out-ember-app/ember-app"),
     };
+
+    let watching = watch_files(project.root.to_owned()).unwrap();
+    // tokio::spawn(async move {
+    //     loop {
+    //         match (watching.rx).recv().await {
+    //             Ok(msg) => println!("got event through broadcast {:?}", msg),
+    //             Err(err) => println!("got error through broadcast {:?}", err),
+    //         }
+    //     }
+    // });
+
     rocket::ignite()
         .attach(AdHoc::on_response("Identify Server", |_, res| {
             Box::pin(async move {
@@ -147,4 +169,5 @@ fn rocket() -> rocket::Rocket {
             StaticFiles::new(project.scaffolding.to_owned(), Options::None).rank(4),
         )
         .manage(project)
+        .manage(watching)
 }

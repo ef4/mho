@@ -16,3 +16,6 @@ clean up extra things in embroider/core's package.json exports, once we port cor
 split template compiler loading out of TransformHBS so we don't need to pass TransformHBS to TransformJS and return templateCompiler method to private
 
 finish updating app-js so it's a true reexport map in json
+
+add file watching to the server. not clear how to do SSE in rocket. Might be
+able to do a totally standalone one in a separate thread using hyper.
