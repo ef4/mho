@@ -1,1 +1,0 @@
-../worker/dist/worker.js
