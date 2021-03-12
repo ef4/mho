@@ -28,6 +28,10 @@ export class FetchHandler {
         return await fetch(event.request);
       }
 
+      if (url.searchParams.get('dropcache') != null) {
+        return await this.doCacheDrop();
+      }
+
       // whenever we're loading the root HTML page, we invalidate the manifest.
       // That will cause it load fresh once, and then remain stable while serving
       // all the supporting requests for modules and assets consumed within the
@@ -74,6 +78,19 @@ export class FetchHandler {
         status: 500,
       });
     }
+  }
+
+  private async doCacheDrop() {
+    let names = await self.caches.keys();
+    for (let name of names) {
+      await self.caches.delete(name);
+    }
+    this.manifestCache = new ManifestCache(this.origin);
+    return new Response(`Caches dropped!`, {
+      headers: {
+        'content-type': 'text/html',
+      },
+    });
   }
 }
 

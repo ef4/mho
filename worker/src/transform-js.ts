@@ -102,7 +102,7 @@ async function plugins({
     [
       remap,
       {
-        mapper: await mapper.snapshot(),
+        mapper: await mapper.snapshot(depend),
       } as RemapOptions,
     ],
   ];

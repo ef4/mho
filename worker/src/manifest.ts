@@ -9,7 +9,7 @@ export class DependencyTracker {
 
   // array of [manifestQuery, cacheKey], where the cacheKeys are the CRC32
   // hashed results of matching the manifestQuery against the manifest
-  private tags: [string, string][] = [];
+  tags: [string, string][] = [];
 
   constructor(
     private manifestCache: ManifestCache,
@@ -55,7 +55,7 @@ export class DependencyTracker {
       return;
     }
 
-    let local = response.url.replace(this.baseURL, '');
+    let local = response.url.replace(this.baseURL, '').replace(/\?.*$/, '');
     for (let excluded of this.manifest.excluded) {
       if (excluded.endsWith('/')) {
         if (local.startsWith(excluded)) {
@@ -193,6 +193,7 @@ export class ManifestCache {
 
     let depend = new DependencyTracker(this, this.baseURL, manifest);
     let freshResponse = await handler(depend);
+    parentTracker?.addTags(depend.tags);
     let xManifestDeps = depend.generateHeader();
     if (xManifestDeps) {
       // we need the clone to not steal the body from the consumer we're
@@ -228,6 +229,8 @@ export class ManifestCache {
     // caching part happens in runWorkThrough.
     let working = this.working.get(key);
     if (working) {
+      // TODO in this case we still need to entangle your dependency tracker
+      // with the answer
       return working;
     }
 
@@ -274,6 +277,7 @@ export class ManifestCache {
     }
     let depend = new DependencyTracker(this, this.baseURL, manifest);
     let freshValue = await fn(depend);
+    parentTracker?.addTags(depend.tags);
     let tag = depend.generateHeader();
     if (tag) {
       this.workCache.set(key, { value: freshValue, tag });

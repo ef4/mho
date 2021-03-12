@@ -8,7 +8,8 @@ export async function loadTemplateCompiler(
 ): Promise<TemplateCompiler> {
   let compilerPath = await mapper.resolve(
     'ember-source/dist/ember-template-compiler',
-    mapper.baseURL.href
+    mapper.baseURL.href,
+    depend
   );
   if (!compilerPath.matched) {
     throw new Error(`no mapping for ember-source/dist/ember-template-compiler`);
