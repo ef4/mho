@@ -28,7 +28,7 @@ export type LoaderResult =
     }
   | {
       // restart the loaders as if the request had looked like this.
-      rewrite: Request | string;
+      rewrite: Request | string | URL;
     };
 
 export type Loader = (params: LoaderParams) => Promise<LoaderResult>;

@@ -2,7 +2,8 @@ import { loadTemplateCompiler } from './template-compiler';
 import { Transform, TransformParams } from './transform';
 
 export const transformHBS: Transform = async function transformHBS({
-  pathname,
+  relativePath,
+  url,
   response,
   forwardHeaders,
   depend,
@@ -20,7 +21,7 @@ export const transformHBS: Transform = async function transformHBS({
     templateCompilerPromise,
   ]);
 
-  let result = templateCompiler.compile(pathname, source);
+  let result = templateCompiler.compile(relativePath || url.href, source);
   return new Response(result, {
     headers: forwardHeaders,
     status: response.status,

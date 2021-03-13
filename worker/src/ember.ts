@@ -1,7 +1,7 @@
 import { compile } from './js-handlebars';
 import { DependencyTracker } from './manifest';
 import { ImportMapper } from './import-mapper';
-import { Loader } from './loader';
+import { Loader, LoaderResult } from './loader';
 import { Crawler, PackageInfo } from './package-info';
 import { AddonMeta } from '@embroider/core';
 
@@ -12,6 +12,7 @@ export const emberEntrypoints: Loader = async function handleSynthesizedFile({
 }) {
   let resources = await addonResources(depend, mapper);
 
+  // serve addon's public assets
   if (relativePath) {
     let addonResource = resources.publicAssets.get(relativePath);
     if (addonResource) {
@@ -20,6 +21,14 @@ export const emberEntrypoints: Loader = async function handleSynthesizedFile({
   }
 
   switch (relativePath) {
+    // config/environment is special because:
+    // - it's authored as /config/environment.js but consumed as /app/config/environment.js
+    // - it's authored in CJS and intended to evaluate within the build, not within the runtime
+    case '/app/config/environment.js':
+      return evaluateConfigEnvironment(
+        new URL('/config/environment.js', mapper.baseURL),
+        depend
+      );
     case '/assets/vendor.js':
     case '/assets/vendor.css':
     case '/assets/vendor.css.map':
@@ -170,14 +179,14 @@ let amdModules = [
     runtime: 'ember-app/adapters/-json-api',
     buildtime: 'ember-data/_app_/adapters/-json-api.js',
   },
-  { runtime: 'ember-app/app', buildtime: '../app/app.js' },
+  { runtime: 'ember-app/app', buildtime: '/app/app.js' },
   {
     runtime: 'ember-app/component-managers/glimmer',
     buildtime: '@glimmer/component/_app_/component-managers/glimmer.js',
   },
   {
     runtime: 'ember-app/config/environment',
-    buildtime: '../config/environment.js',
+    buildtime: '/app/config/environment.js',
   },
   {
     runtime: 'ember-app/data-adapter',
@@ -209,7 +218,7 @@ let amdModules = [
     runtime: 'ember-app/instance-initializers/ember-data',
     buildtime: 'ember-data/_app_/instance-initializers/ember-data.js',
   },
-  { runtime: 'ember-app/router', buildtime: '../app/router.js' },
+  { runtime: 'ember-app/router', buildtime: '/app/router.js' },
   {
     runtime: 'ember-app/serializers/-default',
     buildtime: 'ember-data/_app_/serializers/-default.js',
@@ -355,4 +364,29 @@ function gatherAddonResources(addons: PackageInfo[], baseURL: URL) {
     }
   }
   return { appJS, implicitModules, publicAssets };
+}
+
+const configEnvironmentTemplate = compile(
+  `export default {{{json-stringify env}}};`
+) as (opts: { env: any }) => string;
+
+async function evaluateConfigEnvironment(
+  url: URL,
+  depend: DependencyTracker
+): Promise<LoaderResult> {
+  let response = await fetch(url.href);
+  depend.on(response);
+  if (response.status !== 200) {
+    return response;
+  }
+  let source = await response.text();
+  let module = { exports: {} };
+  let process = { ENV: {} };
+  new Function('module', 'process', source)(module, process);
+  let env = (module.exports as any)('development');
+  return new Response(configEnvironmentTemplate({ env }), {
+    headers: {
+      'content-type': 'application/javascript',
+    },
+  });
 }
