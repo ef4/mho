@@ -14,7 +14,9 @@ export async function loadTemplateCompiler(
   if (!compilerPath.matched) {
     throw new Error(`no mapping for ember-source/dist/ember-template-compiler`);
   }
-  let response = await fetch(compilerPath.resolvedImport.href);
+  let response = await depend.onAndRequestCached(
+    compilerPath.resolvedImport.href
+  );
   if (response.status !== 200) {
     throw new Error(
       `failure while loading ember template compiler (status ${response.status}`

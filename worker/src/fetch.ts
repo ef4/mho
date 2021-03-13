@@ -1,6 +1,6 @@
 import { transformJS } from './transform-js';
 import { transformHBS } from './transform-hbs';
-import { synthesizedFiles } from './synthesize-files';
+import { emberEntrypoints } from './ember';
 import { ImportMapper } from './import-mapper';
 import { DependencyTracker, ManifestCache } from './manifest';
 import { transformHTML } from './transform-html';
@@ -18,7 +18,7 @@ import { fourOhFour } from './404';
 const loaders: Loader[] = [
   debugParamsLoader,
   workerSourceLoader,
-  synthesizedFiles,
+  emberEntrypoints,
   fetchLoader,
   indexHTMLFallback,
 ];

@@ -1,5 +1,44 @@
 import { compile } from './js-handlebars';
 import { DependencyTracker } from './manifest';
+import { ImportMapper } from './import-mapper';
+import { Loader } from './loader';
+import { Crawler } from './package-info';
+
+export const emberEntrypoints: Loader = async function handleSynthesizedFile({
+  relativePath,
+  depend,
+  mapper,
+}) {
+  switch (relativePath) {
+    case '/assets/vendor.js':
+    case '/assets/vendor.css':
+    case '/assets/vendor.css.map':
+    case '/assets/ember-app.css':
+    case '/config/environment.js':
+    case '/ember-welcome-page/images/construction.png':
+      return scaffold(relativePath, depend);
+    case '/':
+    case '/index.html':
+      return { rewrite: '/app/index.html' };
+    case '/_entry_/index.js':
+      return emberJSEntrypoint(depend);
+    case '/_addon_meta_test':
+      let pkgs = await emberAddons(depend, mapper);
+      depend.isVolatile();
+      return new Response(JSON.stringify(pkgs, null, 2));
+  }
+  return undefined;
+};
+
+async function scaffold(
+  stage2Name: string,
+  depend: DependencyTracker
+): Promise<Response> {
+  let response = await fetch(`/scaffolding${stage2Name}`);
+  depend.on(response);
+  return response;
+}
+
 const entryTemplate = compile(`
 import { importSync as i, macroCondition, getGlobalConfig } from '@embroider/macros';
 let w = window;
@@ -203,3 +242,18 @@ let amdModules = [
     buildtime: '@ember-data/model/-private',
   },
 ];
+
+async function emberAddons(depend: DependencyTracker, mapper: ImportMapper) {
+  return depend.onAndWorkCached(emberAddons, async (innerDepend) => {
+    let crawler = new Crawler(
+      innerDepend,
+      mapper,
+      (entry) =>
+        entry.isTopPackage ||
+        entry.pkg?.keywords?.includes('ember-addon') ||
+        false
+    );
+    await crawler.visit('/package.json');
+    return crawler.listPackages();
+  });
+}

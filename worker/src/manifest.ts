@@ -14,7 +14,8 @@ export class DependencyTracker {
   constructor(
     private manifestCache: ManifestCache,
     private baseURL: string,
-    private manifest: Manifest
+    private manifest: Manifest,
+    private cacheEnabled: boolean
   ) {}
 
   // this is how you can check for arbitrary file patterns within the app. When
@@ -116,14 +117,19 @@ export class DependencyTracker {
     request: Request | string,
     handler?: (depend: DependencyTracker) => Promise<Response>
   ) {
-    return this.manifestCache.requestCached(request, true, handler, this);
+    return this.manifestCache.requestCached(
+      request,
+      this.cacheable,
+      handler,
+      this
+    );
   }
 
   onAndWorkCached<K extends object, T>(
     key: K,
     fn: (depend: DependencyTracker) => Promise<T>
   ): Promise<T> {
-    return this.manifestCache.workCached(key, fn, this);
+    return this.manifestCache.workCached(key, this.cacheEnabled, fn, this);
   }
 
   addTag(query: string, tag: string): void {
@@ -212,7 +218,12 @@ export class ManifestCache {
       console.log(`cache miss ${request.url}`);
     }
 
-    let depend = new DependencyTracker(this, this.baseURL, manifest);
+    let depend = new DependencyTracker(
+      this,
+      this.baseURL,
+      manifest,
+      cacheEnabled
+    );
     let freshResponse: Response;
     if (handler) {
       freshResponse = await handler(depend);
@@ -248,6 +259,7 @@ export class ManifestCache {
   // dependencies you reported via the DependencyTracker have changed.
   async workCached<K extends Object, T>(
     key: K,
+    cacheEnabled: boolean,
     fn: (depend: DependencyTracker) => Promise<T>,
     parentTracker?: DependencyTracker
   ): Promise<T> {
@@ -269,7 +281,12 @@ export class ManifestCache {
     });
     this.working.set(key, promise);
     try {
-      let result = await this.runWorkCached(key, fn, parentTracker);
+      let result = await this.runWorkCached(
+        key,
+        fn,
+        parentTracker,
+        cacheEnabled
+      );
       resolve!(result);
       return result;
     } catch (err) {
@@ -286,14 +303,17 @@ export class ManifestCache {
   private async runWorkCached<K extends Object, T>(
     key: K,
     fn: (depend: DependencyTracker) => Promise<T>,
-    parentTracker?: DependencyTracker
+    parentTracker: DependencyTracker | undefined,
+    cacheEnabled: boolean
   ) {
     let cached = this.workCache.get(key);
     let manifest = await this.getManifest();
-    if (cached) {
+    if (!cacheEnabled) {
+      console.log(`work cache disabled`, debugKey(key));
+    } else if (cached) {
       let tags = parseXManifestDeps(cached.tag);
       if (valid(manifest, tags)) {
-        console.log(`work cache hit`, debugKey(key));
+        //console.log(`work cache hit `, debugKey(key));
         parentTracker?.addTags(tags);
         return cached.value;
       }
@@ -302,7 +322,12 @@ export class ManifestCache {
     } else {
       console.log(`work cache miss`, debugKey(key));
     }
-    let depend = new DependencyTracker(this, this.baseURL, manifest);
+    let depend = new DependencyTracker(
+      this,
+      this.baseURL,
+      manifest,
+      cacheEnabled
+    );
     let freshValue = await fn(depend);
     parentTracker?.addTags(depend.tags);
     let tag = depend.generateHeader();
