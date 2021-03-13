@@ -24,7 +24,6 @@ export const emberEntrypoints: Loader = async function handleSynthesizedFile({
     case '/assets/vendor.css':
     case '/assets/vendor.css.map':
     case '/assets/ember-app.css':
-    case '/config/environment.js':
       return scaffold(relativePath, depend);
     case '/':
     case '/index.html':

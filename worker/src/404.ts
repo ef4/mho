@@ -10,5 +10,8 @@ const page = `
 `;
 
 export function fourOhFour() {
-  return new Response(page, { headers: { 'content-type': 'text/html' } });
+  return new Response(page, {
+    status: 404,
+    headers: { 'content-type': 'text/html' },
+  });
 }

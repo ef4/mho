@@ -9,6 +9,7 @@ import rollupBabel from '@rollup/plugin-babel';
 import type { ImportMap } from '@import-maps/resolve';
 import { writeFileSync } from 'fs';
 import rollupHBS from './rollup-hbs-plugin';
+import stringify from 'json-stable-stringify';
 
 const rfc176 = JSON.parse(
   readFileSync(require.resolve('ember-rfc176-data/mappings.json'), 'utf8')
@@ -371,8 +372,11 @@ class Crawler {
       }
     }
 
-    // TODO: your app name here
-    imports['ember-app/config/environment'] = '/config/environment.js';
+    // TODO: your app name here. Also, this is only here because there are
+    // addons that try to import this out of the app. We should put a stop to
+    // that (by only allowing embroider-generated declarative reexports in
+    // app-js).
+    imports['ember-app/config/environment'] = '/app/config/environment.js';
 
     return { imports, scopes };
   }
@@ -492,7 +496,7 @@ async function main() {
 
   writeFileSync(
     '../ember-app/importmap.json',
-    JSON.stringify(crawler.importMap(app), null, 2)
+    stringify(crawler.importMap(app), { space: 2 })
   );
 }
 
