@@ -119,7 +119,7 @@ export class DependencyTracker {
   ) {
     return this.manifestCache.requestCached(
       request,
-      this.cacheable,
+      this.cacheEnabled,
       handler,
       this
     );
@@ -132,6 +132,9 @@ export class DependencyTracker {
     return this.manifestCache.workCached(key, this.cacheEnabled, fn, this);
   }
 
+  // TODO: deduplicate tags because we can end up with a lot of copies of the
+  // same one. If we encounter two different tags for the same query, set
+  // ourself to volatile
   addTag(query: string, tag: string): void {
     this.tags.push([query, tag]);
     if (this.parent) {
@@ -253,6 +256,7 @@ export class ManifestCache {
   }
 
   private working = new WeakMap<object, Promise<any>>();
+  private workCache = new WeakMap<object, { value: any; tag: string }>();
 
   // Cache arbitrary work relative to the manifest. This is WeakMap based. The
   // same key will return the same cached answer as long as none of the
@@ -263,8 +267,25 @@ export class ManifestCache {
     fn: (depend: DependencyTracker) => Promise<T>,
     parentTracker?: DependencyTracker
   ): Promise<T> {
-    // this implementation is all about controlling concurrency. The actual
-    // caching part happens in runWorkThrough.
+    let cached = this.workCache.get(key);
+    let manifest = await this.getManifest();
+    if (!cacheEnabled) {
+      console.log(`work cache disabled`, debugKey(key));
+    } else if (cached) {
+      let tags = parseXManifestDeps(cached.tag);
+      if (valid(manifest, tags)) {
+        //console.log(`work cache hit `, debugKey(key));
+        parentTracker?.addTags(tags);
+        return cached.value;
+      }
+      console.log(`work cache evict`, debugKey(key));
+      this.workCache.delete(key);
+    } else {
+      console.log(`work cache miss`, debugKey(key));
+    }
+
+    // we fell through, so we don't have a cached answer. But maybe somebody
+    // else is already working on it
     let working = this.working.get(key);
     if (working) {
       // this is easier than entangling the parent tracker with the eventual
@@ -285,7 +306,8 @@ export class ManifestCache {
         key,
         fn,
         parentTracker,
-        cacheEnabled
+        cacheEnabled,
+        manifest
       );
       resolve!(result);
       return result;
@@ -298,30 +320,13 @@ export class ManifestCache {
     return (undefined as unknown) as Promise<T>;
   }
 
-  private workCache = new WeakMap<object, { value: any; tag: string }>();
-
   private async runWorkCached<K extends Object, T>(
     key: K,
     fn: (depend: DependencyTracker) => Promise<T>,
     parentTracker: DependencyTracker | undefined,
-    cacheEnabled: boolean
+    cacheEnabled: boolean,
+    manifest: Manifest
   ) {
-    let cached = this.workCache.get(key);
-    let manifest = await this.getManifest();
-    if (!cacheEnabled) {
-      console.log(`work cache disabled`, debugKey(key));
-    } else if (cached) {
-      let tags = parseXManifestDeps(cached.tag);
-      if (valid(manifest, tags)) {
-        //console.log(`work cache hit `, debugKey(key));
-        parentTracker?.addTags(tags);
-        return cached.value;
-      }
-      console.log(`work cache evict`, debugKey(key));
-      this.workCache.delete(key);
-    } else {
-      console.log(`work cache miss`, debugKey(key));
-    }
     let depend = new DependencyTracker(
       this,
       this.baseURL,

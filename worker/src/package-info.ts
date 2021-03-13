@@ -3,8 +3,8 @@ import { ImportMapper } from './import-mapper';
 import { DependencyTracker } from './manifest';
 
 export interface PackageInfo {
-  pkg: PackageJson;
-  url: string; // url to package.json
+  json: PackageJson;
+  url: URL; // base URL for the package's files
 
   isTopPackage: boolean; // does this package have access to devDependencies?
 
@@ -54,15 +54,15 @@ export class Crawler {
     return [...output];
   }
 
-  private dependencyNames(info: PackageInfo): Set<string> {
+  private dependencyNames(pkg: PackageInfo): Set<string> {
     let sections: ('dependencies' | 'devDependencies')[] = ['dependencies'];
-    if (info.isTopPackage) {
+    if (pkg.isTopPackage) {
       sections.push('devDependencies');
     }
     let depNames = new Set<string>();
     for (let section of sections) {
-      if (info.pkg[section]) {
-        for (let name of Object.keys(info.pkg[section]!)) {
+      if (pkg.json[section]) {
+        for (let name of Object.keys(pkg.json[section]!)) {
           depNames.add(name);
         }
       }
@@ -70,16 +70,16 @@ export class Crawler {
     return depNames;
   }
 
-  async visit(url: string, isTopPackage = true): Promise<void[] | void> {
-    this.seen.add(url);
-    let response = await this.depend.onAndRequestCached(url);
+  async visit(url: URL, isTopPackage = true): Promise<void[] | void> {
+    this.seen.add(url.href);
+    let response = await this.depend.onAndRequestCached(url.href);
     if (response.status !== 200) {
       return;
     }
     let pkg = await response.json();
     let entry: PackageInfo = {
-      pkg,
-      url,
+      json: pkg,
+      url: new URL('.', url),
       isTopPackage,
       resolutions: {},
     };
@@ -87,20 +87,20 @@ export class Crawler {
     if (this.filter && !this.filter(entry)) {
       return;
     }
-    this.packages.set(url, entry);
+    this.packages.set(url.href, entry);
     let depNames = this.dependencyNames(entry);
 
     return Promise.all(
       [...depNames].map(async (depName) => {
         let resolution = await this.mapper.resolve(
           depName + '/package.json',
-          url,
+          url.href,
           this.depend
         );
         if (resolution.matched) {
           entry.resolutions[depName] = resolution.resolvedImport.href;
           if (!this.seen.has(resolution.resolvedImport.href)) {
-            await this.visit(resolution.resolvedImport.href, false);
+            await this.visit(resolution.resolvedImport, false);
           }
         }
       })

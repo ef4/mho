@@ -154,7 +154,10 @@ export class FetchHandler {
             );
           }
           let newRequest: Request;
-          if (typeof result.rewrite === 'string') {
+          if (
+            typeof result.rewrite === 'string' ||
+            result.rewrite instanceof URL
+          ) {
             newRequest = new Request(result.rewrite, {
               headers: request.headers,
               method: request.method,

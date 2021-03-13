@@ -259,6 +259,14 @@ class Crawler {
       join(pkg.root, 'package.json'),
       join(`dist`, this.scopeFor(pkg), 'package.json')
     );
+    if (pkg.isV2Addon() && pkg.meta['public-assets']) {
+      for (let file of Object.keys(pkg.meta['public-assets'])) {
+        copySync(
+          join(pkg.root, file),
+          join('dist', this.scopeFor(pkg), 'e', file)
+        );
+      }
+    }
   }
 
   private resolvePlugin(pkg: Package) {

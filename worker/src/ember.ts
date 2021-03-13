@@ -2,30 +2,53 @@ import { compile } from './js-handlebars';
 import { DependencyTracker } from './manifest';
 import { ImportMapper } from './import-mapper';
 import { Loader } from './loader';
-import { Crawler } from './package-info';
+import { Crawler, PackageInfo } from './package-info';
+import { AddonMeta } from '@embroider/core';
 
 export const emberEntrypoints: Loader = async function handleSynthesizedFile({
   relativePath,
   depend,
   mapper,
 }) {
+  let resources = await addonResources(depend, mapper);
+
+  if (relativePath) {
+    let addonResource = resources.publicAssets.get(relativePath);
+    if (addonResource) {
+      return { rewrite: addonResource };
+    }
+  }
+
   switch (relativePath) {
     case '/assets/vendor.js':
     case '/assets/vendor.css':
     case '/assets/vendor.css.map':
     case '/assets/ember-app.css':
     case '/config/environment.js':
-    case '/ember-welcome-page/images/construction.png':
       return scaffold(relativePath, depend);
     case '/':
     case '/index.html':
       return { rewrite: '/app/index.html' };
     case '/_entry_/index.js':
       return emberJSEntrypoint(depend);
-    case '/_addon_meta_test':
-      let pkgs = await emberAddons(depend, mapper);
-      depend.isVolatile();
-      return new Response(JSON.stringify(pkgs, null, 2));
+    case '/_ember_debug/addon_resources': {
+      return new Response(
+        JSON.stringify(
+          Object.fromEntries(
+            Object.entries(resources).map(([k, v]) => [
+              k,
+              Object.fromEntries(v),
+            ])
+          ),
+          null,
+          2
+        )
+      );
+    }
+    case '/_ember_debug/app_tree': {
+      let m = await availableAppTree(resources.appJS, depend);
+      return new Response(JSON.stringify(Object.fromEntries(m), null, 2));
+    }
   }
   return undefined;
 };
@@ -243,17 +266,94 @@ let amdModules = [
   },
 ];
 
-async function emberAddons(depend: DependencyTracker, mapper: ImportMapper) {
-  return depend.onAndWorkCached(emberAddons, async (innerDepend) => {
-    let crawler = new Crawler(
-      innerDepend,
-      mapper,
-      (entry) =>
-        entry.isTopPackage ||
-        entry.pkg?.keywords?.includes('ember-addon') ||
-        false
-    );
-    await crawler.visit('/package.json');
-    return crawler.listPackages();
+// this is the main cached resource for stuff out of addons. It should only
+// change when you change dependencies (causing your import map to change) or if
+// one of your addons is being served without long-lived caching headers.
+async function addonResources(depend: DependencyTracker, mapper: ImportMapper) {
+  return depend.onAndWorkCached(addonResources, async (innerDepend) => {
+    let addons = await emberAddons(innerDepend, mapper);
+    return gatherAddonResources(addons, mapper.baseURL);
   });
+}
+
+async function emberAddons(
+  depend: DependencyTracker,
+  mapper: ImportMapper
+): Promise<PackageInfo[]> {
+  let crawler = new Crawler(
+    depend,
+    mapper,
+    (entry) =>
+      entry.isTopPackage ||
+      entry.json?.keywords?.includes('ember-addon') ||
+      false
+  );
+  await crawler.visit(new URL('/package.json', mapper.baseURL));
+  return crawler.listPackages();
+}
+
+function v2Meta({ json }: PackageInfo): AddonMeta | undefined {
+  if (json?.keywords?.includes('ember-addon')) {
+    let meta = (json as any)['ember-addon'];
+    if (meta && meta.version >= 2) {
+      return meta as AddonMeta;
+    }
+  }
+  return undefined;
+}
+
+// files from addons that are active in our app tree. Anything that our app also
+// defines will knock things out of here
+function availableAppTree(
+  addonAppJS: Map<string, URL>,
+  depend: DependencyTracker
+) {
+  let merged = new Map(addonAppJS);
+  for (let path of depend.queryManifest('/app/**')) {
+    merged.delete(path);
+  }
+  return merged;
+}
+
+function gatherAddonResources(addons: PackageInfo[], baseURL: URL) {
+  // appRelativePath -> URL
+  let appJS = new Map<string, URL>();
+
+  // runtimeName -> URL
+  let implicitModules = new Map<string, URL>();
+
+  // appRelativePath -> URL
+  let publicAssets = new Map<string, URL>();
+
+  for (let pkg of addons) {
+    let meta = v2Meta(pkg);
+    if (!meta) {
+      continue;
+    }
+    if (meta['app-js']) {
+      for (let [exterior, interior] of Object.entries(meta['app-js'])) {
+        appJS.set('/app' + exterior.slice(1), new URL(interior, pkg.url));
+      }
+    }
+    if (meta['implicit-modules']) {
+      for (let path of meta['implicit-modules']) {
+        implicitModules.set(
+          pkg.json.name + path.slice(1).replace(/\.js$/, ''),
+          new URL(path, pkg.url)
+        );
+      }
+    }
+    if (meta['public-assets']) {
+      for (let [localPath, appRelativeURL] of Object.entries(
+        meta['public-assets']
+      )) {
+        let url = new URL(appRelativeURL, baseURL);
+        publicAssets.set(
+          url.href.replace(baseURL.href, '/'),
+          new URL(localPath, pkg.url + 'e/')
+        );
+      }
+    }
+  }
+  return { appJS, implicitModules, publicAssets };
 }
