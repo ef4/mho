@@ -33,7 +33,7 @@ export const emberEntrypoints: Loader = async function handleSynthesizedFile({
     case '/assets/vendor.css':
     case '/assets/vendor.css.map':
     case '/assets/ember-app.css':
-      return scaffold(relativePath, depend);
+      return scaffold(relativePath, depend, mapper);
     case '/':
     case '/index.html':
       return { rewrite: '/app/index.html' };
@@ -63,11 +63,15 @@ export const emberEntrypoints: Loader = async function handleSynthesizedFile({
 
 async function scaffold(
   stage2Name: string,
-  depend: DependencyTracker
-): Promise<Response> {
-  let response = await fetch(`/scaffolding${stage2Name}`);
-  depend.on(response);
-  return response;
+  depend: DependencyTracker,
+  mapper: ImportMapper
+): Promise<LoaderResult> {
+  let resolved = await mapper.resolve(
+    `@embroider/synthesized-scaffold${stage2Name}`,
+    mapper.baseURL.href,
+    depend
+  );
+  return { rewrite: resolved.resolvedImport };
 }
 
 const entryTemplate = compile(`

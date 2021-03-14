@@ -215,6 +215,7 @@
     "@ember/test-helpers/package.json": "http://mho-demo.s3-website-us-east-1.amazonaws.com/@ember/test-helpers-2.2.3/package.json",
     "@ember/test-waiters": "http://mho-demo.s3-website-us-east-1.amazonaws.com/@ember/test-waiters-2.4.2/index.js",
     "@ember/test-waiters/package.json": "http://mho-demo.s3-website-us-east-1.amazonaws.com/@ember/test-waiters-2.4.2/package.json",
+    "@embroider/synthesized-scaffold/": "http://mho-demo.s3-website-us-east-1.amazonaws.com/@embroider/synthesized-scaffold-1.0.0/",
     "@glimmer/component": "http://mho-demo.s3-website-us-east-1.amazonaws.com/@glimmer/component-1.0.4/index.js",
     "@glimmer/component/-private/ember-component-manager": "http://mho-demo.s3-website-us-east-1.amazonaws.com/@glimmer/component-1.0.4/e/-private/ember-component-manager.js",
     "@glimmer/component/_app_/component-managers/glimmer.js": "http://mho-demo.s3-website-us-east-1.amazonaws.com/@glimmer/component-1.0.4/e/_app_/component-managers/glimmer.js",

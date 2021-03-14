@@ -218,7 +218,9 @@ export class ManifestCache {
       await cache.delete(request);
       console.log(`cache evict ${request.url}`);
     } else {
-      console.log(`cache miss ${request.url}`);
+      if (!/^chrome-extension:\/\//.test(request.url)) {
+        console.log(`cache miss ${request.url}`);
+      }
     }
 
     let depend = new DependencyTracker(

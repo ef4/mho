@@ -11,7 +11,7 @@ import { writeFileSync } from 'fs';
 import rollupHBS from './rollup-hbs-plugin';
 import stringify from 'json-stable-stringify';
 
-const target = '../ember-app';
+const targetAppDir = '../ember-app';
 const appName = 'ember-app';
 
 const rfc176 = JSON.parse(
@@ -381,6 +381,11 @@ class Crawler {
     // app-js).
     imports[`${appName}/config/environment`] = '/app/config/environment.js';
 
+    // TODO: last bits of scaffolding
+    imports[
+      `@embroider/synthesized-scaffold/`
+    ] = `${mountPoint}@embroider/synthesized-scaffold-1.0.0/`;
+
     return { imports, scopes };
   }
 
@@ -463,7 +468,7 @@ export function explicitRelative(fromDir: string, toFile: string) {
 
 async function main() {
   let crawler = new Crawler();
-  let basedir = readFileSync(`${target}/dist/.stage2-output`, 'utf8');
+  let basedir = readFileSync(`${targetAppDir}/dist/.stage2-output`, 'utf8');
   let app = crawler.packages.getApp(basedir);
   for (let dep of app.dependencies) {
     if (!externals.has(dep.name)) {
@@ -497,8 +502,21 @@ async function main() {
 
   await crawler.run();
 
+  // TODO last bits of scaffolding
+  for (let name of [
+    '/assets/vendor.js',
+    '/assets/vendor.css',
+    '/assets/vendor.css.map',
+    '/assets/ember-app.css',
+  ]) {
+    copySync(
+      join(basedir, name),
+      join(`dist/@embroider/synthesized-scaffold-1.0.0/`, name)
+    );
+  }
+
   writeFileSync(
-    `${target}/importmap.json`,
+    `${targetAppDir}/importmap.json`,
     stringify(
       crawler.importMap(
         app,
