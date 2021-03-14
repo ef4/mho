@@ -1,9 +1,7 @@
 import { FetchHandler } from './fetch';
-import { LivenessWatcher } from './liveness';
 
 const worker = (self as unknown) as ServiceWorkerGlobalScope;
-const livenessWatcher = new LivenessWatcher(worker);
-const fetchHandler = new FetchHandler(worker.registration.scope);
+const fetchHandler = new FetchHandler(worker);
 
 worker.addEventListener('install', () => {
   // force moving on to activation even if another service worker had control
@@ -17,7 +15,5 @@ worker.addEventListener('activate', () => {
 });
 
 worker.addEventListener('fetch', (event: FetchEvent) => {
-  event.respondWith(
-    fetchHandler.handleFetch(event.request, livenessWatcher.alive)
-  );
+  event.respondWith(fetchHandler.handleFetch(event.request));
 });

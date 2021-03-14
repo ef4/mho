@@ -19,6 +19,7 @@
     "lint:js": "eslint . --cache",
     "lint:js:fix": "eslint . --fix",
     "start": "ember serve",
+    "start:mho": "cd ../server && cargo run -- -r ../ember-app -d ../deps/dist -w ../worker/dist",
     "test": "npm-run-all lint test:*",
     "test:ember": "ember test"
   },

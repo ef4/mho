@@ -1,3 +1,4 @@
+import { LivenessWatcher } from './liveness';
 import { transformJS } from './transform-js';
 import { transformHBS } from './transform-hbs';
 import { emberEntrypoints } from './ember';
@@ -30,16 +31,24 @@ const transforms: { [type: string]: Transform } = {
 };
 
 export class FetchHandler {
-  constructor(private baseURL: string) {}
+  private baseURL: string;
+  private livenessWatcher: LivenessWatcher;
+  private manifestCache: ManifestCache;
+  private mapper: ImportMapper;
 
-  private manifestCache = new ManifestCache(this.baseURL);
-  private mapper = new ImportMapper(this.baseURL, '/importmap.json');
+  constructor(worker: ServiceWorkerGlobalScope) {
+    this.baseURL = worker.registration.scope;
+    this.livenessWatcher = new LivenessWatcher(worker, async () => {
+      await this.doCacheDrop();
+    });
+    this.manifestCache = new ManifestCache(this.baseURL);
+    this.mapper = new ImportMapper(this.baseURL, '/importmap.json');
+  }
 
-  async handleFetch(request: Request, alive: boolean): Promise<Response> {
+  async handleFetch(request: Request): Promise<Response> {
     try {
-      if (!alive) {
-        // if we've been told to shut down, we let all requests pass through
-        // unchange
+      if (!this.livenessWatcher.alive) {
+        // if we're shutting down, let all requests pass through unchanged
         return await fetch(request);
       }
 

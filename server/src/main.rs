@@ -9,11 +9,14 @@ extern crate serde_derive;
 mod tests;
 
 mod cache_headers;
+mod cli;
+
+use cli::ProjectConfig;
 
 use cache_headers::CacheHeaders;
 
 use rocket::fairing::AdHoc;
-use rocket::response::content::Html;
+use rocket::response::content::{Html, JavaScript};
 use rocket::response::NamedFile;
 use rocket::State;
 
@@ -92,6 +95,27 @@ fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
     })
 }
 
+// this isn't strictly necessary but Rocket emits confusing warnings when its
+// default HEAD implementation (which is perfectly fine) handles this instead of
+// us.
+//
+// The service worker uses HEAD /mho-client.js to check that the server is still
+// present.
+#[head("/mho-client.js")]
+async fn client_js_head() -> () {
+    ()
+}
+
+#[get("/mho-client.js")]
+async fn client_js_static() -> JavaScript<&'static str> {
+    JavaScript(std::include_str!("../../worker/dist/mho-client.js"))
+}
+
+#[get("/mho-server.js")]
+async fn worker_js_static() -> JavaScript<&'static str> {
+    JavaScript(std::include_str!("../../worker/dist/mho-worker.js"))
+}
+
 #[get("/<path..>", rank = 9)]
 async fn files<'r>(
     path: PathBuf,
@@ -100,15 +124,14 @@ async fn files<'r>(
     let target;
     let mut long_lived = false;
     if path == PathBuf::from("mho-client.js") || path == PathBuf::from("mho-worker.js") {
-        target = project.worker.join(path);
+        target = project.worker.as_ref()?.join(path);
     } else if path.starts_with("deps") {
-        target = project.deps.join(path.strip_prefix("deps").ok()?);
+        target = project.deps.as_ref()?.join(path.strip_prefix("deps").ok()?);
         long_lived = true;
     } else {
         target = project.root.join(path);
     }
 
-    println!("attempting to serve {}", target.display());
     let named = NamedFile::open(target).await.ok()?;
     if long_lived {
         Some(CacheHeaders::immutable(named))
@@ -117,34 +140,26 @@ async fn files<'r>(
     }
 }
 
-struct ProjectConfig {
-    root: PathBuf,
-    worker: PathBuf,
-    deps: PathBuf,
-    scaffolding: PathBuf,
-}
-
 #[launch]
 fn rocket() -> rocket::Rocket {
-    let project = ProjectConfig {
-        root: PathBuf::from("../ember-app"),
-        worker: PathBuf::from("../worker/dist"),
-        deps: PathBuf::from("../deps/dist"),
-        scaffolding: PathBuf::from("../out-ember-app/ember-app"),
-    };
+    let project = cli::options();
+
+    let mut active_routes = routes![bootstrap, manifest, files, client_js_head];
+    if project.worker.is_none() {
+        let mut worker_routes = routes![client_js_static, worker_js_static];
+        active_routes.append(&mut worker_routes);
+    }
+
     rocket::ignite()
         .attach(AdHoc::on_response("Identify Server", |_, res| {
             Box::pin(async move {
-                res.set_header(rocket::http::Header::new(
-                    "Server",
-                    "use-the-platform (Rocket)",
-                ));
+                res.set_header(rocket::http::Header::new("Server", "mho (Rocket)"));
             })
         }))
-        .mount("/", routes![bootstrap, manifest, files])
+        .mount("/", active_routes)
         .mount(
             "/scaffolding",
-            StaticFiles::new(project.scaffolding.to_owned(), Options::None).rank(4),
+            StaticFiles::new(&project.scaffolding, Options::None).rank(4),
         )
         .manage(project)
 }
