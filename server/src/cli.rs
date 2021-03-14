@@ -9,7 +9,6 @@ pub struct ProjectConfig {
     pub root: PathBuf,
     pub worker: Option<PathBuf>,
     pub deps: Option<PathBuf>,
-    pub scaffolding: PathBuf,
 }
 
 pub fn options() -> ProjectConfig {
@@ -25,22 +24,23 @@ pub fn options() -> ProjectConfig {
     let root = match matches.value_of("project-root") {
         Some(d) => PathBuf::from(d),
         None => PathBuf::from("."),
-    };
+    }
+    .canonicalize()
+    .unwrap();
 
     let deps = match matches.value_of("deps") {
-        Some(d) => Some(PathBuf::from(d)),
+        // using unwrap on purpose here so you get a crash instead of an ignored
+        // option
+        Some(d) => Some(PathBuf::from(d).canonicalize().unwrap()),
         None => None,
     };
 
     let worker = match matches.value_of("worker-js") {
-        Some(d) => Some(PathBuf::from(d)),
+        // using unwrap on purpose here so you get a crash instead of an ignored
+        // option
+        Some(d) => Some(PathBuf::from(d).canonicalize().unwrap()),
         None => None,
     };
 
-    ProjectConfig {
-        deps,
-        worker,
-        root,
-        scaffolding: PathBuf::from("../out-ember-app/ember-app"),
-    }
+    ProjectConfig { deps, worker, root }
 }

@@ -21,7 +21,6 @@ use rocket::response::NamedFile;
 use rocket::State;
 
 use rocket_contrib::json::Json;
-use rocket_contrib::serve::{Options, StaticFiles};
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -88,6 +87,8 @@ fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
     Json(Manifest {
         files,
         excluded: vec![
+            // TODO: we can drop deps from this list when nobody has passed that
+            // command line option
             "/deps/".to_string(),
             "/mho-client.js".to_string(),
             "/mho-worker.js".to_string(),
@@ -111,7 +112,7 @@ async fn client_js_static() -> JavaScript<&'static str> {
     JavaScript(std::include_str!("../../worker/dist/mho-client.js"))
 }
 
-#[get("/mho-server.js")]
+#[get("/mho-worker.js")]
 async fn worker_js_static() -> JavaScript<&'static str> {
     JavaScript(std::include_str!("../../worker/dist/mho-worker.js"))
 }
@@ -150,16 +151,16 @@ fn rocket() -> rocket::Rocket {
         active_routes.append(&mut worker_routes);
     }
 
-    rocket::ignite()
+    // TODO: rocket's default logging isn't great, but it's better to have noisy
+    // logs than none. We should make our own output though.
+    let figment = rocket::Config::figment().merge(("log_level", "normal"));
+
+    rocket::custom(figment)
         .attach(AdHoc::on_response("Identify Server", |_, res| {
             Box::pin(async move {
                 res.set_header(rocket::http::Header::new("Server", "mho (Rocket)"));
             })
         }))
         .mount("/", active_routes)
-        .mount(
-            "/scaffolding",
-            StaticFiles::new(&project.scaffolding, Options::None).rank(4),
-        )
         .manage(project)
 }

@@ -280,7 +280,7 @@ export class ManifestCache {
         parentTracker?.addTags(tags);
         return cached.value;
       }
-      console.log(`work cache evict`, debugKey(key));
+      console.log(`work cache evict`, debugKey(key), explain(manifest, tags));
       this.workCache.delete(key);
     } else {
       console.log(`work cache miss`, debugKey(key));
@@ -382,6 +382,19 @@ function valid(
   return Boolean(
     deps && deps.every(([query, key]) => cacheTagFor(manifest, query) === key)
   );
+}
+
+function explain(manifest: Manifest, deps: null | [string, string][]): string {
+  if (!deps) {
+    return 'no known cache tags';
+  }
+  let failures = deps.filter(
+    ([query, key]) => cacheTagFor(manifest, query) !== key
+  );
+  if (failures.length === 0) {
+    return 'found no invalid cache tags';
+  }
+  return `changes in ${failures.map((f) => f[0]).join(', ')}`;
 }
 
 const encoder = new TextEncoder();

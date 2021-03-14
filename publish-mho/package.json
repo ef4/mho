@@ -1,0 +1,8 @@
+{
+  "name": "mho",
+  "version": "0.0.1",
+  "description": "The mho serviceworker build system",
+  "bin": "./mho",
+  "author": "Edward Faulkner <edward@eaf4.com>",
+  "license": "MIT"
+}
