@@ -21,7 +21,10 @@ export const workerSourceLoader: Loader = async function ({
   depend,
   request,
 }) {
-  if (relativePath && ['/client.js', '/worker.js'].includes(relativePath)) {
+  if (
+    relativePath &&
+    ['/mho-client.js', '/mho-worker.js'].includes(relativePath)
+  ) {
     depend.isVolatile();
     return fetch(request);
   }

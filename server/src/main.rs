@@ -53,7 +53,7 @@ fn summarize(entry: &DirEntry, root: &Path) -> Option<(String, String)> {
 
 #[get("/")]
 fn bootstrap() -> Html<&'static str> {
-    Html("<!DOCTYPE html><body data-launching-service-worker><script type=\"module\" src=\"/client.js\"></script>Launching service worker...</body>")
+    Html("<!DOCTYPE html><body data-launching-service-worker><script type=\"module\" src=\"/mho-client.js\"></script>Launching service worker...</body>")
 }
 
 #[derive(Serialize, Deserialize)]
@@ -86,8 +86,8 @@ fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
         files,
         excluded: vec![
             "/deps/".to_string(),
-            "/client.js".to_string(),
-            "/worker.js".to_string(),
+            "/mho-client.js".to_string(),
+            "/mho-worker.js".to_string(),
         ],
     })
 }
@@ -99,7 +99,7 @@ async fn files<'r>(
 ) -> Option<CacheHeaders<NamedFile>> {
     let target;
     let mut long_lived = false;
-    if path == PathBuf::from("client.js") || path == PathBuf::from("worker.js") {
+    if path == PathBuf::from("mho-client.js") || path == PathBuf::from("mho-worker.js") {
         target = project.worker.join(path);
     } else if path.starts_with("deps") {
         target = project.deps.join(path.strip_prefix("deps").ok()?);

@@ -2,7 +2,7 @@ import { timeout } from './util';
 
 async function start() {
   if (!navigator.serviceWorker.controller) {
-    navigator.serviceWorker.register('./worker.js', {
+    navigator.serviceWorker.register('./mho-worker.js', {
       scope: '/',
     });
     let registration = await navigator.serviceWorker.ready;

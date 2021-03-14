@@ -12,7 +12,7 @@ export class LivenessWatcher {
   }
 
   private async backendIsOurs(): Promise<boolean> {
-    let response = await fetch(`${this.worker.origin}/worker.js`, {
+    let response = await fetch(`${this.worker.origin}/mho-worker.js`, {
       method: 'HEAD',
     });
     switch (response.status) {

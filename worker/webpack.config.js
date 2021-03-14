@@ -2,7 +2,7 @@ const path = require('path');
 const webpack = require('webpack');
 
 module.exports = {
-  mode: 'development',
+  mode: process.env.PRODUCTION != null ? 'production' : 'development',
   entry: {
     worker: './src/worker.ts',
     client: './src/client.ts',
@@ -24,7 +24,7 @@ module.exports = {
     ],
   },
   output: {
-    filename: '[name].js',
+    filename: 'mho-[name].js',
   },
   resolve: {
     extensions: ['.ts', '.js', '.json'],
