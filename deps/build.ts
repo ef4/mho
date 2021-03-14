@@ -499,7 +499,13 @@ async function main() {
 
   writeFileSync(
     `${target}/importmap.json`,
-    stringify(crawler.importMap(app), { space: 2 })
+    stringify(
+      crawler.importMap(
+        app,
+        'http://mho-demo.s3-website-us-east-1.amazonaws.com/'
+      ),
+      { space: 2 }
+    )
   );
 }
 

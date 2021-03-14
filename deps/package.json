@@ -25,7 +25,8 @@
     "typescript": "^4.2.2"
   },
   "scripts": {
-    "prepare": "ts-node --transpile-only build.ts"
+    "prepare": "ts-node --transpile-only build.ts",
+    "upload": "AWS_PROFILE=polynomial aws s3 sync --acl=public-read --cache-control='max-age=604800' dist/ s3://mho-demo"
   },
   "volta": {
     "extends": "../package.json"

@@ -8,7 +8,7 @@ module.exports = {
     client: './src/client.ts',
   },
   target: 'webworker',
-  devtool: 'inline-source-map',
+  devtool: process.env.PRODUCTION != null ? false : 'inline-source-map',
   plugins: [
     new webpack.ProvidePlugin({
       process: 'process',

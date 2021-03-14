@@ -11,18 +11,16 @@ import { SyncImportMapper } from './import-mapper';
 
 export interface RemapOptions {
   mapper: SyncImportMapper;
+  requester: URL;
 }
 
-interface State {
-  opts: object;
-  filename: string;
-}
+interface State {}
 
 export default function main(_unused: unknown, opts: RemapOptions) {
   function remap(specifier: string, requester: string): string | undefined {
     let remapped = opts.mapper.resolve(specifier, requester);
     if (remapped?.matched) {
-      if (remapped.resolvedImport.origin === opts.mapper.baseURL.origin) {
+      if (opts.requester.origin === remapped.resolvedImport.origin) {
         return remapped.resolvedImport.pathname;
       } else {
         return remapped.resolvedImport.href;

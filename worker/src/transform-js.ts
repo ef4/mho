@@ -17,10 +17,10 @@ const macrosConfig = MacrosConfig.for(self);
 // TODO: this won't be needed once we are synthesizes vendor.js
 const passthrough = ['/assets/vendor.js'];
 
-async function plugins({
-  depend,
-  mapper,
-}: TransformParams): Promise<TransformOptions['plugins']> {
+async function plugins(
+  { depend, mapper }: TransformParams,
+  requester: URL
+): Promise<TransformOptions['plugins']> {
   let templateCompiler = await depend.onAndWorkCached(
     loadTemplateCompiler,
     (innerDepend) => {
@@ -103,6 +103,7 @@ async function plugins({
       remap,
       {
         mapper: await mapper.snapshot(depend),
+        requester,
       } as RemapOptions,
     ],
   ];
@@ -117,8 +118,11 @@ export const transformJS: Transform = async function transformJS(
   }
   let source = await response.text();
   let result = transformSync(source, {
+    // "filename" is only useful for human debugging of bugs, because babel
+    // tries to path.resolve it, so absolute URLs get mangled. Where we really
+    // need it, we pass it separately directly to the plugins.
     filename: request.url,
-    plugins: await plugins(params),
+    plugins: await plugins(params, new URL(request.url)),
     generatorOpts: {
       compact: false,
     },

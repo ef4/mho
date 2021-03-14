@@ -5,7 +5,8 @@
   "license": "MIT",
   "scripts": {
     "prepare": "webpack",
-    "start": "webpack --watch"
+    "start": "webpack --watch",
+    "prod": "PRODUCTION=true webpack"
   },
   "devDependencies": {
     "@aws-crypto/crc32": "^1.0.0",
