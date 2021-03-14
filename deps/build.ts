@@ -11,6 +11,9 @@ import { writeFileSync } from 'fs';
 import rollupHBS from './rollup-hbs-plugin';
 import stringify from 'json-stable-stringify';
 
+const target = '../ember-app';
+const appName = 'ember-app';
+
 const rfc176 = JSON.parse(
   readFileSync(require.resolve('ember-rfc176-data/mappings.json'), 'utf8')
 );
@@ -93,7 +96,7 @@ class Crawler {
       )
     ) {
       return {
-        id: 'ember-app/config/environment',
+        id: `${appName}/config/environment`,
         external: true,
       };
     }
@@ -376,7 +379,7 @@ class Crawler {
     // addons that try to import this out of the app. We should put a stop to
     // that (by only allowing embroider-generated declarative reexports in
     // app-js).
-    imports['ember-app/config/environment'] = '/app/config/environment.js';
+    imports[`${appName}/config/environment`] = '/app/config/environment.js';
 
     return { imports, scopes };
   }
@@ -460,7 +463,7 @@ export function explicitRelative(fromDir: string, toFile: string) {
 
 async function main() {
   let crawler = new Crawler();
-  let basedir = readFileSync('../ember-app/dist/.stage2-output', 'utf8');
+  let basedir = readFileSync(`${target}/dist/.stage2-output`, 'utf8');
   let app = crawler.packages.getApp(basedir);
   for (let dep of app.dependencies) {
     if (!externals.has(dep.name)) {
@@ -495,7 +498,7 @@ async function main() {
   await crawler.run();
 
   writeFileSync(
-    '../ember-app/importmap.json',
+    `${target}/importmap.json`,
     stringify(crawler.importMap(app), { space: 2 })
   );
 }
