@@ -16,5 +16,6 @@ module.exports = function (defaults) {
     staticComponents: true,
     staticHelpers: true,
     workspaceDir: '../out-ember-app',
+    implicitModulesStrategy: 'packageNames',
   });
 };
