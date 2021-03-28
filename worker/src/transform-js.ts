@@ -13,6 +13,7 @@ import { Transform, TransformParams } from './transform';
 import { loadTemplateCompiler } from './template-compiler';
 
 const macrosConfig = MacrosConfig.for(self);
+macrosConfig.importSyncImplementation = 'eager';
 
 // TODO: this won't be needed once we are synthesizes vendor.js
 const passthrough = ['/assets/vendor.js'];
