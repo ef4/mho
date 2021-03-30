@@ -3,7 +3,7 @@ import commonjs from '@rollup/plugin-commonjs';
 import nodeResolve from '@rollup/plugin-node-resolve';
 import { dirname, relative, resolve, join, isAbsolute, basename } from 'path';
 import { copySync, readFileSync } from 'fs-extra';
-import { Package, PackageCache } from '@embroider/core';
+import { emberVirtualPackages, PackageCache, Package } from '@embroider/core';
 import json from '@rollup/plugin-json';
 import rollupBabel from '@rollup/plugin-babel';
 import type { ImportMap } from '@import-maps/resolve';
@@ -14,21 +14,7 @@ import stringify from 'json-stable-stringify';
 const targetAppDir = '../ember-app';
 const appName = 'ember-app';
 
-const rfc176 = JSON.parse(
-  readFileSync(require.resolve('ember-rfc176-data/mappings.json'), 'utf8')
-);
-
-const externals = new Set<string>();
-for (let { module } of rfc176) {
-  externals.add(module);
-}
-
-// more things that are provided by babel
-externals.add('@glimmer/env');
-externals.add('ember');
-
-// this is a real package but it's still listed in rfc176
-externals.delete('@ember/string');
+const externals = new Set(emberVirtualPackages);
 
 // these are build only dependnecies. To the extent that they show up in browser
 // code imports, it's because they're more babel macro behavior (like hbs from
