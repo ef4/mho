@@ -9,7 +9,7 @@ export class DependencyTracker {
 
   // array of [manifestQuery, cacheKey], where the cacheKeys are the CRC32
   // hashed results of matching the manifestQuery against the manifest
-  tags: [string, string][] = [];
+  private tags: [string, string][] = [];
 
   constructor(
     private manifestCache: ManifestCache,
@@ -132,13 +132,16 @@ export class DependencyTracker {
     return this.manifestCache.workCached(key, this.cacheEnabled, fn, this);
   }
 
-  // TODO: deduplicate tags because we can end up with a lot of copies of the
-  // same one. If we encounter two different tags for the same query, set
-  // ourself to volatile
   addTag(query: string, tag: string): void {
-    this.tags.push([query, tag]);
-    if (this.parent) {
-      this.parent.addTag(query, tag);
+    let prior = this.tags.find((t) => t[0] === query);
+    if (prior) {
+      if (prior[1] !== tag) {
+        // we depend on two inconsistent versions of the same resource, so we're
+        // not cacheable
+        this.isVolatile();
+      }
+    } else {
+      this.tags.push([query, tag]);
     }
   }
 
@@ -148,6 +151,10 @@ export class DependencyTracker {
     }
   }
 
+  dependsOn(childTracker: DependencyTracker) {
+    this.addTags(childTracker.tags);
+  }
+
   isVolatile() {
     this.cacheable = false;
   }
@@ -155,8 +162,6 @@ export class DependencyTracker {
   invalidateManifest(): void {
     this.manifestCache.invalidateManifest();
   }
-
-  private parent: DependencyTracker | undefined;
 }
 
 export class ManifestCache {
@@ -235,7 +240,7 @@ export class ManifestCache {
     } else {
       freshResponse = await fetch(request);
     }
-    parentTracker?.addTags(depend.tags);
+    parentTracker?.dependsOn(depend);
     let xManifestDeps = depend.generateHeader();
     if (xManifestDeps) {
       // we need the clone to not steal the body from the consumer we're
@@ -336,7 +341,7 @@ export class ManifestCache {
       cacheEnabled
     );
     let freshValue = await fn(depend);
-    parentTracker?.addTags(depend.tags);
+    parentTracker?.dependsOn(depend);
     let tag = depend.generateHeader();
     if (tag) {
       this.workCache.set(key, { value: freshValue, tag });
