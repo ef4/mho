@@ -11,6 +11,9 @@ import runtime from '@babel/plugin-transform-runtime';
 import makeInlineHBS from '@embroider/core/src/babel-plugin-inline-hbs';
 import { Transform, TransformParams } from './transform';
 import { loadTemplateCompiler } from './template-compiler';
+import { DependencyTracker } from './manifest';
+import { ImportMapper } from './import-mapper';
+import miniModulesPolyfill from '@embroider/core/src/mini-modules-polyfill';
 
 const macrosConfig = MacrosConfig.for(self);
 macrosConfig.importSyncImplementation = 'eager';
@@ -19,7 +22,8 @@ macrosConfig.importSyncImplementation = 'eager';
 const passthrough = ['/assets/vendor.js'];
 
 async function plugins(
-  { depend, mapper }: TransformParams,
+  depend: DependencyTracker,
+  mapper: ImportMapper,
   requester: URL
 ): Promise<TransformOptions['plugins']> {
   let templateCompiler = await depend.onAndWorkCached(
@@ -80,6 +84,7 @@ async function plugins(
       },
       '@ember/application/deprecations stripping',
     ],
+    [inlineHBS, { stage: 3 }],
     [
       modulesAPI,
       {
@@ -89,8 +94,8 @@ async function plugins(
         },
       },
     ],
-    [inlineHBS, { stage: 3 }],
     [macrosPlugin, (macrosConfig.babelPluginConfig() as any)[1]],
+    miniModulesPolyfill,
     // TODO: embroider's template colocation plugin
     [
       runtime,
@@ -110,25 +115,39 @@ async function plugins(
   ];
 }
 
-export const transformJS: Transform = async function transformJS(
-  params: TransformParams
-): Promise<Response> {
-  let { relativePath, response, forwardHeaders, request } = params;
-  if (relativePath && passthrough.includes(relativePath)) {
-    return response;
-  }
-  let source = await response.text();
+export async function transpile(
+  source: string,
+  url: URL,
+  depend: DependencyTracker,
+  mapper: ImportMapper
+): Promise<string> {
   let result = transformSync(source, {
     // "filename" is only useful for human debugging of bugs, because babel
     // tries to path.resolve it, so absolute URLs get mangled. Where we really
     // need it, we pass it separately directly to the plugins.
-    filename: request.url,
-    plugins: await plugins(params, new URL(request.url)),
+    filename: url.href,
+    plugins: await plugins(depend, mapper, url),
     generatorOpts: {
       compact: false,
     },
   });
-  return new Response(result!.code, {
+  return result!.code!;
+}
+
+export const transformJS: Transform = async function transformJS({
+  url,
+  relativePath,
+  response,
+  forwardHeaders,
+  depend,
+  mapper,
+}: TransformParams): Promise<Response> {
+  if (relativePath && passthrough.includes(relativePath)) {
+    return response;
+  }
+  let source = await response.text();
+  let result = await transpile(source, url, depend, mapper);
+  return new Response(result, {
     headers: forwardHeaders,
     status: response.status,
     statusText: response.statusText,

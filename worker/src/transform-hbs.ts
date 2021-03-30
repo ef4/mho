@@ -1,5 +1,6 @@
 import { loadTemplateCompiler } from './template-compiler';
 import { Transform, TransformParams } from './transform';
+import { transpile } from './transform-js';
 
 export const transformHBS: Transform = async function transformHBS({
   relativePath,
@@ -21,8 +22,10 @@ export const transformHBS: Transform = async function transformHBS({
     templateCompilerPromise,
   ]);
 
-  let result = templateCompiler.compile(relativePath || url.href, source);
-  return new Response(result, {
+  let rawJS = templateCompiler.compile(relativePath || url.href, source);
+  let finalJS = await transpile(rawJS, url, depend, mapper);
+
+  return new Response(finalJS, {
     headers: forwardHeaders,
     status: response.status,
     statusText: response.statusText,
