@@ -32,11 +32,11 @@ pub struct ProjectConfig {
 }
 
 pub fn options() -> ProjectConfig {
-    let opts: ProjectConfig = ProjectConfig::parse();
+    let mut opts: ProjectConfig = ProjectConfig::parse();
 
-    let root = opts.root.canonicalize().unwrap();
-    let deps = opts.deps.map(|d| d.canonicalize().unwrap());
-    let worker = opts.worker.map(|d| d.canonicalize().unwrap());
+    opts.root = opts.root.canonicalize().unwrap();
+    opts.deps = opts.deps.map(|d| d.canonicalize().unwrap());
+    opts.worker = opts.worker.map(|d| d.canonicalize().unwrap());
 
-    ProjectConfig { deps, worker, root }
+    opts
 }
