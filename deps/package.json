@@ -8,7 +8,7 @@
     "@babel/core": "^7.13.10",
     "@babel/plugin-proposal-decorators": "^7.13.5",
     "@babel/plugin-transform-runtime": "^7.13.10",
-    "@embroider/core": "*",
+    "@embroider/core": "0.39.0",
     "@import-maps/resolve": "^1.0.1",
     "json-stable-stringify": "^1.0.1",
     "@rollup/plugin-babel": "^5.3.0",

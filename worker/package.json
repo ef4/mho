@@ -16,7 +16,7 @@
     "@babel/plugin-transform-runtime": "^7.13.10",
     "@babel/plugin-transform-typescript": "^7.13.0",
     "@babel/types": "^7.13.0",
-    "@embroider/macros": "*",
+    "@embroider/macros": "0.39.0",
     "@import-maps/resolve": "^1.0.1",
     "@types/babel__core": "^7.1.12",
     "@types/babel__traverse": "^7.11.0",
