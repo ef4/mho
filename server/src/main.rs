@@ -23,7 +23,6 @@ use rocket::State;
 use rocket_contrib::json::Json;
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
 
@@ -45,7 +44,7 @@ fn is_node_modules(entry: &DirEntry) -> bool {
 
 fn summarize(entry: &DirEntry, root: &Path) -> Option<(String, String)> {
     let name = PathBuf::from("/").join(entry.path().strip_prefix(root).ok()?);
-    let meta = fs::metadata(entry.path()).ok()?;
+    let meta = entry.metadata().ok()?;
     let modified = meta.modified().ok()?;
     let duration = modified
         .duration_since(std::time::SystemTime::UNIX_EPOCH)
@@ -72,18 +71,14 @@ struct Manifest {
 
 #[get("/manifest")]
 fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
-    let mut files = BTreeMap::new();
-    let walker = WalkDir::new(&project.root)
+    let files = WalkDir::new(&project.root)
         .into_iter()
         .filter_entry(|e| !is_hidden(e) && !is_node_modules(e))
-        .filter_map(|e| e.ok());
-    for entry in walker {
-        if entry.file_type().is_file() {
-            if let Some((name, etag)) = summarize(&entry, &project.root) {
-                files.insert(name, etag);
-            }
-        }
-    }
+        .filter_map(|e| e.ok())
+        .filter(|entry| entry.file_type().is_file())
+        .filter_map(|entry| summarize(&entry, &project.root))
+        .collect();
+
     Json(Manifest {
         files,
         excluded: vec![
