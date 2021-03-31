@@ -31,6 +31,17 @@ This will build _everything_ including the third-party deps (a step you only nee
 
 7. Build and run mho: `cd ember-app; yarn start:mho`
 
+## Orientation
+
+When running the prebuilt demo, the `mho` binary contains a prebuilt copy of all the worker code, and the ember-app contains an `importmap.json` pointing at prebuilt dependencies on s3.
+
+When running from scratch:
+
+- running the ember build puts the stage2 build output into `./out-ember-app`.
+- building the deps reads from `./out-ember-app` and writes into `/deps/dist` and `./ember-app/importmap.json`
+- the worker builds into `./worker/dist`
+- we run `mho` with command line options telling it to use the worker code from `./worker-dist` and serve the deps from `./deps/dist`, and the importmap points at the files served from `./deps/dist`
+
 ## TODOs
 
 switch to ember beta with no modules polyfill at all!
