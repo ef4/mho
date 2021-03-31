@@ -18,13 +18,13 @@ pub struct ProjectConfig {
     )]
     pub root: PathBuf,
 
-    /// Optionally serve a local directory of prebuilt packages at /deps/
-    #[clap(short, long, value_name = "DIR")]
-    pub deps: Option<PathBuf>,
-
     /// Serve a locally-built copy of the worker JavaScript instead of the built-in copy
     #[clap(short, long = "worker-js", value_name = "DIR")]
     pub worker: Option<PathBuf>,
+
+    /// Optionally serve a local directory of prebuilt packages at /deps/
+    #[clap(short, long, value_name = "DIR")]
+    pub deps: Option<PathBuf>,
 }
 
 pub fn options() -> ProjectConfig {
