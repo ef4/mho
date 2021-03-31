@@ -11,7 +11,7 @@ use std::path::PathBuf;
     author = "Edward Faulkner <edward@eaf4.com>",
     about = "The webserver for mho ServiceWorker-based builds."
 )]
-struct Opts {
+pub struct ProjectConfig {
     /// Path to your project (defaults to current working directory)
     #[clap(
         short = 'p',
@@ -20,25 +20,19 @@ struct Opts {
         default_value = ".",
         hide_default_value = true
     )]
-    root: PathBuf,
+    pub root: PathBuf,
 
     /// Optionally serve a local directory of prebuilt packages at /deps/
     #[clap(short, long, value_name = "DIR")]
-    deps: Option<PathBuf>,
+    pub deps: Option<PathBuf>,
 
     /// Serve a locally-built copy of the worker JavaScript instead of the built-in copy
     #[clap(short, long = "worker-js", value_name = "DIR")]
-    worker: Option<PathBuf>,
-}
-
-pub struct ProjectConfig {
-    pub root: PathBuf,
     pub worker: Option<PathBuf>,
-    pub deps: Option<PathBuf>,
 }
 
 pub fn options() -> ProjectConfig {
-    let opts: Opts = Opts::parse();
+    let opts: ProjectConfig = ProjectConfig::parse();
 
     let root = opts.root.canonicalize().unwrap();
     let deps = opts.deps.map(|d| d.canonicalize().unwrap());
