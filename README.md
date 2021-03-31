@@ -14,22 +14,23 @@ The prebuilt binary is currently only compiled for OSX (tested on Big Sur). To t
 
 This will build _everything_ including the third-party deps (a step you only need to run when you want to change the app's deps).
 
-1. Prerequisites:
+1. Install volta.
+2. Install rust nightly (currently tested under 1.52.0-nightly 2fd73fabe)
 
-- rust: currently tested under 1.52.0-nightly (234781afe 2021-03-07)
-- volta
+- install rustup (the defaults are fine): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- switch to nightly: `rustup toolchain install nightly; rustup toolchain default nightly`
 
-2. Clone this repo
+3. Clone this repo
 
-3. yarn install
+4. yarn install
 
-4. Start the build of the worker code: `cd worker; yarn start`
+5. Start the build of the worker code: `cd worker; yarn start`
 
-5. Run the embroider build of the ember app. `cd ember-app; yarn ember build`
+6. Run the embroider build of the ember app. `cd ember-app; yarn ember build`
 
-6. Build the deps. `cd deps && yarn prepare`
+7. Build the deps. `cd deps && yarn prepare`
 
-7. Build and run mho: `cd ember-app; yarn start:mho`
+8. Build and run mho: `cd ember-app; yarn start:mho`
 
 ## Orientation
 
