@@ -23,7 +23,6 @@ use rocket::State;
 use rocket_contrib::json::Json;
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
 
@@ -45,7 +44,7 @@ fn is_node_modules(entry: &DirEntry) -> bool {
 
 fn summarize(entry: &DirEntry, root: &Path) -> Option<(String, String)> {
     let name = PathBuf::from("/").join(entry.path().strip_prefix(root).ok()?);
-    let meta = fs::metadata(entry.path()).ok()?;
+    let meta = entry.metadata().ok()?;
     let modified = meta.modified().ok()?;
     let duration = modified
         .duration_since(std::time::SystemTime::UNIX_EPOCH)
