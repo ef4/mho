@@ -72,18 +72,14 @@ struct Manifest {
 
 #[get("/manifest")]
 fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
-    let mut files = BTreeMap::new();
-    let walker = WalkDir::new(&project.root)
+    let files = WalkDir::new(&project.root)
         .into_iter()
         .filter_entry(|e| !is_hidden(e) && !is_node_modules(e))
-        .filter_map(|e| e.ok());
-    for entry in walker {
-        if entry.file_type().is_file() {
-            if let Some((name, etag)) = summarize(&entry, &project.root) {
-                files.insert(name, etag);
-            }
-        }
-    }
+        .filter_map(|e| e.ok())
+        .filter(|entry| entry.file_type().is_file())
+        .filter_map(|entry| summarize(&entry, &project.root))
+        .collect();
+
     Json(Manifest {
         files,
         excluded: vec![
