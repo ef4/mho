@@ -34,26 +34,14 @@ pub struct ProjectConfig {
 pub fn options() -> ProjectConfig {
     let opts: Opts = Opts::parse();
 
-    let root = match opts.project_root {
-        Some(d) => d,
-        None => PathBuf::from("."),
-    }
-    .canonicalize()
-    .unwrap();
+    let root = opts
+        .project_root
+        .unwrap_or_else(|| PathBuf::from("."))
+        .canonicalize()
+        .unwrap();
 
-    let deps = match opts.deps {
-        // using unwrap on purpose here so you get a crash instead of an ignored
-        // option
-        Some(d) => Some(d.canonicalize().unwrap()),
-        None => None,
-    };
-
-    let worker = match opts.worker_js {
-        // using unwrap on purpose here so you get a crash instead of an ignored
-        // option
-        Some(d) => Some(d.canonicalize().unwrap()),
-        None => None,
-    };
+    let deps = opts.deps.map(|d| d.canonicalize().unwrap());
+    let worker = opts.worker_js.map(|d| d.canonicalize().unwrap());
 
     ProjectConfig { deps, worker, root }
 }
