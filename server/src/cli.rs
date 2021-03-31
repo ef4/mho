@@ -1,7 +1,3 @@
-// (Full example with detailed comments in examples/01a_quick_example.rs)
-//
-// This example demonstrates clap's "usage strings" method of creating arguments
-// which is less verbose
 use clap::Clap;
 use std::path::PathBuf;
 
