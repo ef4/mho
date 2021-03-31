@@ -14,21 +14,21 @@ use std::path::PathBuf;
 struct Opts {
     /// Path to your project (defaults to current working directory)
     #[clap(
-        short,
-        long,
+        short = 'p',
+        long = "project-root",
         value_name = "DIR",
         default_value = ".",
         hide_default_value = true
     )]
-    project_root: PathBuf,
+    root: PathBuf,
 
     /// Optionally serve a local directory of prebuilt packages at /deps/
     #[clap(short, long, value_name = "DIR")]
     deps: Option<PathBuf>,
 
     /// Serve a locally-built copy of the worker JavaScript instead of the built-in copy
-    #[clap(short, long, value_name = "DIR")]
-    worker_js: Option<PathBuf>,
+    #[clap(short, long = "worker-js", value_name = "DIR")]
+    worker: Option<PathBuf>,
 }
 
 pub struct ProjectConfig {
@@ -40,9 +40,9 @@ pub struct ProjectConfig {
 pub fn options() -> ProjectConfig {
     let opts: Opts = Opts::parse();
 
-    let root = opts.project_root.canonicalize().unwrap();
+    let root = opts.root.canonicalize().unwrap();
     let deps = opts.deps.map(|d| d.canonicalize().unwrap());
-    let worker = opts.worker_js.map(|d| d.canonicalize().unwrap());
+    let worker = opts.worker.map(|d| d.canonicalize().unwrap());
 
     ProjectConfig { deps, worker, root }
 }
