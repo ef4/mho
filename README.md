@@ -1,4 +1,4 @@
-# the-platform: a demo of building entirely in service worker
+# mho: an experiment service-worker based javascript build tool
 
 ## Run the prebuilt demo
 
