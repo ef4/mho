@@ -18,7 +18,7 @@ This will build _everything_ including the third-party deps (a step you only nee
 2. Install rust nightly (currently tested under 1.52.0-nightly 2fd73fabe)
 
 - install rustup (the defaults are fine): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-- switch to nightly: `rustup toolchain install nightly; rustup toolchain default nightly`
+- install rust nightly: `rustup toolchain install nightly`
 
 3. Clone this repo
 
