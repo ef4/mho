@@ -118,9 +118,9 @@ async fn worker_js_static() -> JavaScript<&'static str> {
 }
 
 #[get("/<path..>", rank = 9)]
-async fn files<'r>(
+async fn files(
     path: PathBuf,
-    project: State<ProjectConfig, 'r>,
+    project: State<'_, ProjectConfig>,
 ) -> Option<CacheHeaders<NamedFile>> {
     let target;
     let mut long_lived = false;
