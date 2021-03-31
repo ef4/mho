@@ -1,4 +1,4 @@
-# mho: an experiment service-worker based javascript build tool
+# mho: an experimental service-worker based javascript build tool
 
 ## Run the prebuilt demo
 
