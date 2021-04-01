@@ -15,10 +15,8 @@ The prebuilt binary is currently only compiled for OSX (tested on Big Sur). To t
 This will build _everything_ including the third-party deps (a step you only need to run when you want to change the app's deps).
 
 1. Install volta.
-2. Install rust nightly (currently tested under 1.52.0-nightly 2fd73fabe)
 
-- install rustup (the defaults are fine): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-- install rust nightly: `rustup toolchain install nightly`
+2. Install rust (see https://rustup.rs)
 
 3. Clone this repo
 

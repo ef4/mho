@@ -1,27 +1,15 @@
-#![feature(proc_macro_hygiene, decl_macro)]
-
-#[macro_use]
-extern crate rocket;
 #[macro_use]
 extern crate serde_derive;
 
-#[cfg(test)]
-mod tests;
-
-mod cache_headers;
 mod cli;
 
 use cli::ProjectConfig;
 
-use cache_headers::CacheHeaders;
-
-use rocket::fairing::AdHoc;
-use rocket::response::content::{Html, JavaScript};
-use rocket::response::NamedFile;
-use rocket::State;
-
-use rocket_contrib::json::Json;
-
+use actix_files::NamedFile;
+use actix_web::http::header::{CACHE_CONTROL, SERVER};
+use actix_web::http::HeaderValue;
+use actix_web::middleware::{Compress, DefaultHeaders, Logger};
+use actix_web::{get, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
@@ -53,15 +41,17 @@ fn summarize(entry: &DirEntry, root: &Path) -> Option<(String, String)> {
 }
 
 #[get("/")]
-fn bootstrap() -> Html<&'static str> {
-    Html("<!DOCTYPE html><body data-launching-service-worker><script type=\"module\" src=\"/mho-client.js\"></script>Launching service worker...</body>")
+async fn bootstrap() -> impl Responder {
+    HttpResponse::Ok()
+        .content_type("text/html")
+        .body("<!DOCTYPE html><body data-launching-service-worker><script type=\"module\" src=\"/mho-client.js\"></script>Launching service worker...</body>")
 }
 
 #[derive(Serialize, Deserialize)]
 struct Manifest {
     // the etag for each URL on our origin. If it's not present here, it doesn't
     // exist, with the exception of the exclude list below.
-    files: std::collections::BTreeMap<String, String>,
+    files: BTreeMap<String, String>,
 
     // list of urls or url prefixes (ones ending in "/") that are not considered
     // part of our manifest. If they're not in the manifest, that doesn't mean
@@ -70,7 +60,7 @@ struct Manifest {
 }
 
 #[get("/manifest")]
-fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
+async fn manifest(project: web::Data<ProjectConfig>) -> impl Responder {
     let files = WalkDir::new(&project.root)
         .into_iter()
         .filter_entry(|e| !is_hidden(e) && !is_node_modules(e))
@@ -79,7 +69,7 @@ fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
         .filter_map(|entry| summarize(&entry, &project.root))
         .collect();
 
-    Json(Manifest {
+    web::Json(Manifest {
         files,
         excluded: vec![
             // TODO: we can drop deps from this list when nobody has passed that
@@ -91,71 +81,80 @@ fn manifest(project: State<ProjectConfig>) -> Json<Manifest> {
     })
 }
 
-// this isn't strictly necessary but Rocket emits confusing warnings when its
-// default HEAD implementation (which is perfectly fine) handles this instead of
-// us.
-//
-// The service worker uses HEAD /mho-client.js to check that the server is still
-// present.
-#[head("/mho-client.js")]
-async fn client_js_head() -> () {
-    ()
-}
-
 #[get("/mho-client.js")]
-async fn client_js_static() -> JavaScript<&'static str> {
-    JavaScript(std::include_str!("../../worker/dist/mho-client.js"))
+async fn client_js_static() -> impl Responder {
+    HttpResponse::Ok()
+        .content_type("text/javascript")
+        .body(std::include_str!("../../worker/dist/mho-client.js"))
 }
 
 #[get("/mho-worker.js")]
-async fn worker_js_static() -> JavaScript<&'static str> {
-    JavaScript(std::include_str!("../../worker/dist/mho-worker.js"))
+async fn worker_js_static() -> impl Responder {
+    HttpResponse::Ok()
+        .content_type("text/javascript")
+        .body(std::include_str!("../../worker/dist/mho-worker.js"))
 }
 
-#[get("/<path..>", rank = 9)]
 async fn files(
-    path: PathBuf,
-    project: State<'_, ProjectConfig>,
-) -> Option<CacheHeaders<NamedFile>> {
+    req: HttpRequest,
+    project: web::Data<ProjectConfig>,
+) -> actix_web::Result<impl Responder> {
+    let path = match req.path().strip_prefix("/") {
+        Some(path) => path,
+        None => return Ok(HttpResponse::NotFound().finish()),
+    };
+
     let target;
     let mut long_lived = false;
-    if path == PathBuf::from("mho-client.js") || path == PathBuf::from("mho-worker.js") {
-        target = project.worker.as_ref()?.join(path);
-    } else if path.starts_with("deps") {
-        target = project.deps.as_ref()?.join(path.strip_prefix("deps").ok()?);
+    if project.worker.is_some() && (path == "mho-client.js" || path == "mho-worker.js") {
+        target = project.worker.as_ref().unwrap().join(path);
+    } else if project.deps.is_some() && path.starts_with("deps/") {
+        let dep_path = path.strip_prefix("deps").unwrap();
+        target = project.deps.as_ref().unwrap().join(dep_path);
         long_lived = true;
     } else {
         target = project.root.join(path);
     }
 
-    let named = NamedFile::open(target).await.ok()?;
+    let named = NamedFile::open(target)?.disable_content_disposition();
+    let mut response = named.into_response(&req)?;
+
     if long_lived {
-        Some(CacheHeaders::immutable(named))
-    } else {
-        CacheHeaders::etag(named).await
+        response.headers_mut().insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=604800"),
+        )
     }
+
+    Ok(response)
 }
 
-#[launch]
-fn rocket() -> rocket::Rocket {
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .format_level(false)
+        .format_module_path(false)
+        .init();
+
     let project = cli::options();
 
-    let mut active_routes = routes![bootstrap, manifest, files, client_js_head];
-    if project.worker.is_none() {
-        let mut worker_routes = routes![client_js_static, worker_js_static];
-        active_routes.append(&mut worker_routes);
-    }
+    HttpServer::new(move || {
+        let mut app = App::new()
+            .data(project.clone())
+            .wrap(Logger::default())
+            .wrap(Compress::default())
+            .wrap(DefaultHeaders::default().header(SERVER, "mho (actix)"))
+            .service(bootstrap)
+            .service(manifest)
+            .default_service(web::route().to(files));
 
-    // TODO: rocket's default logging isn't great, but it's better to have noisy
-    // logs than none. We should make our own output though.
-    let figment = rocket::Config::figment().merge(("log_level", "normal"));
+        if project.worker.is_none() {
+            app = app.service(client_js_static).service(worker_js_static);
+        }
 
-    rocket::custom(figment)
-        .attach(AdHoc::on_response("Identify Server", |_, res| {
-            Box::pin(async move {
-                res.set_header(rocket::http::Header::new("Server", "mho (Rocket)"));
-            })
-        }))
-        .mount("/", active_routes)
-        .manage(project)
+        app
+    })
+    .bind("127.0.0.1:8000")?
+    .run()
+    .await
 }

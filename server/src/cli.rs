@@ -1,7 +1,7 @@
 use clap::Clap;
 use std::path::PathBuf;
 
-#[derive(Clap, Debug)]
+#[derive(Clap, Clone, Debug)]
 #[clap(
     version = "0.0.0",
     author = "Edward Faulkner <edward@eaf4.com>",
