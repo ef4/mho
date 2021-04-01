@@ -1,7 +1,7 @@
 use clap::Clap;
 use std::path::PathBuf;
 
-#[derive(Clap, Debug)]
+#[derive(Clap, Clone, Debug)]
 #[clap(
     version = "0.0.0",
     author = "Edward Faulkner <edward@eaf4.com>",
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 pub struct ProjectConfig {
     /// Path to your project (defaults to current working directory)
     #[clap(
-        short = 'p',
+        short = 'r',
         long = "project-root",
         value_name = "DIR",
         default_value = ".",
