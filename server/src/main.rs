@@ -2,8 +2,10 @@
 extern crate serde_derive;
 
 mod cli;
+mod events;
 
 use cli::ProjectConfig;
+use events::ChangeBroadcaster;
 
 use actix_files::NamedFile;
 use actix_web::http::header::{CACHE_CONTROL, SERVER};
@@ -38,6 +40,16 @@ fn summarize(entry: &DirEntry, root: &Path) -> Option<(String, String)> {
         .duration_since(std::time::SystemTime::UNIX_EPOCH)
         .ok()?;
     Some((name.to_str()?.to_owned(), duration.as_secs().to_string()))
+}
+
+#[get("/notify")]
+async fn notify_change(change_broadcaster: web::Data<ChangeBroadcaster>) -> impl Responder {
+    let rx = change_broadcaster.new_client().await;
+
+    HttpResponse::Ok()
+        .header("content-type", "text/event-stream")
+        .no_chunking(0)
+        .streaming(rx)
 }
 
 #[get("/")]
@@ -138,9 +150,12 @@ async fn main() -> std::io::Result<()> {
 
     let project = cli::options();
 
+    let change_broadcaster = ChangeBroadcaster::create(".");
+
     HttpServer::new(move || {
         let mut app = App::new()
             .data(project.clone())
+            .data(change_broadcaster.clone())
             .wrap(Logger::default())
             .wrap(Compress::default())
             .wrap(DefaultHeaders::default().header(SERVER, "mho (actix)"))
